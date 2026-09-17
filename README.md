@@ -10,6 +10,7 @@ Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)
 |---------|-----|
 | [Manual Guide](docs/MANUAL.md) | Cara pakai modul, RBAC, roster Excel, mobile/PWA |
 | [ERD](docs/ERD.md) | Entity Relationship Diagram (Prisma + runtime) |
+| [Deploy VPS](docs/DEPLOY-VPS.md) | Docker Compose + Nginx + HTTPS di VPS |
 
 ## Fitur utama
 

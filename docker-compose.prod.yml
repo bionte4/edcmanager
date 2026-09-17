@@ -1,0 +1,25 @@
+services:
+  db:
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: edcmanager
+    # Remove host port publish (DB only on Docker network)
+    ports: !reset []
+
+  app:
+    ports: !reset
+      - "127.0.0.1:3000:3000"
+    environment:
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/edcmanager?schema=public
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-EDC Manager <noreply@edc.local>}
+      AI_INSIGHTS_ENABLED: ${AI_INSIGHTS_ENABLED:-true}
+      AI_PROVIDER: ${AI_PROVIDER:-heuristic}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
