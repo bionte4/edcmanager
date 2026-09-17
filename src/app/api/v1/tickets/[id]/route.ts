@@ -20,9 +20,9 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireIntegrationClient(request, "tickets:read");
+    await requireIntegrationClient(request, "tickets:read");
     const { id } = await context.params;
-    const ticket = getTicketById(id);
+    const ticket = await getTicketById(id);
     if (!ticket) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
@@ -37,7 +37,7 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireIntegrationClient(request, "tickets:write");
+    await requireIntegrationClient(request, "tickets:write");
     const { id } = await context.params;
     const body = (await request.json()) as {
       status?: WorkflowTicketStatus;
@@ -46,7 +46,7 @@ export async function PATCH(
       problemId?: string;
       relatedChangeId?: string;
     };
-    const ticket = patchIntegrationTicket(id, body);
+    const ticket = await patchIntegrationTicket(id, body);
     return NextResponse.json({ data: toIntegrationDto(ticket) });
   } catch (e) {
     return errorResponse(e);

@@ -22,7 +22,7 @@ async function requireUser(): Promise<AuthUser> {
   if (!token) throw new Error("Unauthorized");
   const session = await verifySessionToken(token);
   if (!session) throw new Error("Unauthorized");
-  const stored = findUserById(session.sub);
+  const stored = await findUserById(session.sub);
   if (!stored || !stored.isActive) throw new Error("Unauthorized");
   return sessionToAuthUser(session);
 }
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get("activeOnly") === "1";
     return NextResponse.json({
-      categories: listTicketCategories({ activeOnly }),
+      categories: await listTicketCategories({ activeOnly }),
     });
   } catch (e) {
     return NextResponse.json(
@@ -60,10 +60,12 @@ export async function POST(request: Request) {
     };
 
     if (body.action === "reset") {
-      return NextResponse.json({ categories: resetTicketCategories() });
+      return NextResponse.json({
+        categories: await resetTicketCategories(),
+      });
     }
 
-    const category = createTicketCategory(body);
+    const category = await createTicketCategory(body);
     return NextResponse.json({ category }, { status: 201 });
   } catch (e) {
     return NextResponse.json(
@@ -82,7 +84,7 @@ export async function PATCH(request: Request) {
     };
     if (!body.id) throw new Error("id wajib diisi.");
     const { id, ...rest } = body;
-    const category = updateTicketCategory(id, rest);
+    const category = await updateTicketCategory(id, rest);
     return NextResponse.json({ category });
   } catch (e) {
     return NextResponse.json(
@@ -99,7 +101,7 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (!id) throw new Error("id wajib diisi.");
-    deleteTicketCategory(id);
+    await deleteTicketCategory(id);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json(

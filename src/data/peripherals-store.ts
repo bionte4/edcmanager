@@ -7,6 +7,13 @@ import {
   type PeripheralUnit,
   type StockMutationType,
 } from "@/config/peripherals.config";
+import { prisma } from "@/lib/prisma";
+import type {
+  PeripheralBalance as PrismaBalance,
+  PeripheralMutation as PrismaMutation,
+  PeripheralSku as PrismaSku,
+  StockMutationType as PrismaMutationType,
+} from "@prisma/client";
 
 export interface StockMutation {
   id: string;
@@ -41,14 +48,6 @@ export interface StockBalance {
   updatedAt: string;
 }
 
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function balKey(skuId: string, ro: string) {
-  return `${skuId}::${ro}`;
-}
-
 function assertCategory(v: string): PeripheralCategory {
   if (!(PERIPHERAL_CATEGORIES as readonly string[]).includes(v)) {
     throw new Error("Kategori peripheral tidak valid.");
@@ -63,7 +62,53 @@ function assertMutation(v: string): StockMutationType {
   return v as StockMutationType;
 }
 
-const seedSkus: PeripheralSku[] = [
+function mapSku(row: PrismaSku): PeripheralSku {
+  return {
+    id: row.id,
+    skuCode: row.skuCode,
+    name: row.name,
+    category: row.category as PeripheralCategory,
+    unit: row.unit as PeripheralUnit,
+    minStock: row.minStock,
+    notes: row.notes,
+    isActive: row.isActive,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function mapBalance(row: PrismaBalance): StockBalance {
+  return {
+    skuId: row.skuId,
+    regionalOffice: row.regionalOffice,
+    quantity: row.quantity,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function mapMutation(row: PrismaMutation): StockMutation {
+  return {
+    id: row.id,
+    skuId: row.skuId,
+    type: row.type as StockMutationType,
+    quantity: row.quantity,
+    fromRo: row.fromRo,
+    toRo: row.toRo,
+    notes: row.notes,
+    mutatedAt: row.mutatedAt.toISOString(),
+    mutatedBy: row.mutatedBy,
+  };
+}
+
+const SEED_SKUS: Array<{
+  id: string;
+  skuCode: string;
+  name: string;
+  category: PeripheralCategory;
+  unit: PeripheralUnit;
+  minStock: number;
+  notes?: string;
+}> = [
   {
     id: "sku-cable-usb",
     skuCode: "CBL-USB-1M",
@@ -72,9 +117,6 @@ const seedSkus: PeripheralSku[] = [
     unit: "pcs",
     minStock: 50,
     notes: "Standar deploy",
-    isActive: true,
-    createdAt: "2026-01-05T02:00:00.000Z",
-    updatedAt: "2026-01-05T02:00:00.000Z",
   },
   {
     id: "sku-cable-pwr",
@@ -83,9 +125,6 @@ const seedSkus: PeripheralSku[] = [
     category: "CABLE",
     unit: "pcs",
     minStock: 40,
-    isActive: true,
-    createdAt: "2026-01-05T02:00:00.000Z",
-    updatedAt: "2026-01-05T02:00:00.000Z",
   },
   {
     id: "sku-paper-57",
@@ -94,9 +133,6 @@ const seedSkus: PeripheralSku[] = [
     category: "PAPER_ROLL",
     unit: "roll",
     minStock: 200,
-    isActive: true,
-    createdAt: "2026-01-05T02:00:00.000Z",
-    updatedAt: "2026-01-05T02:00:00.000Z",
   },
   {
     id: "sku-sim-xl",
@@ -105,9 +141,6 @@ const seedSkus: PeripheralSku[] = [
     category: "SIM_CARD",
     unit: "pcs",
     minStock: 30,
-    isActive: true,
-    createdAt: "2026-01-08T02:00:00.000Z",
-    updatedAt: "2026-01-08T02:00:00.000Z",
   },
   {
     id: "sku-spare-batt",
@@ -116,13 +149,10 @@ const seedSkus: PeripheralSku[] = [
     category: "SPARE_PART",
     unit: "pcs",
     minStock: 15,
-    isActive: true,
-    createdAt: "2026-02-01T02:00:00.000Z",
-    updatedAt: "2026-02-01T02:00:00.000Z",
   },
 ];
 
-const seedBalances: Array<[string, string, number]> = [
+const SEED_BALANCES: Array<[string, string, number]> = [
   ["sku-cable-usb", "RO Jakarta 1", 80],
   ["sku-cable-usb", "RO Bandung", 18],
   ["sku-cable-usb", "RO Surabaya", 45],
@@ -145,78 +175,49 @@ const seedBalances: Array<[string, string, number]> = [
   ["sku-spare-batt", "RO Denpasar", 4],
 ];
 
-let skus: PeripheralSku[] = seedSkus.map((s) => ({ ...s }));
-let balances = new Map<string, StockBalance>();
-let mutations: StockMutation[] = [];
-
-function resetBalancesFromSeed() {
-  balances = new Map();
-  for (const [skuId, ro, qty] of seedBalances) {
-    balances.set(balKey(skuId, ro), {
-      skuId,
-      regionalOffice: ro,
-      quantity: qty,
-      updatedAt: nowIso(),
-    });
-  }
-  mutations = [];
-}
-
-resetBalancesFromSeed();
-
-function getQty(skuId: string, ro: string): number {
-  return balances.get(balKey(skuId, ro))?.quantity ?? 0;
-}
-
-function setQty(skuId: string, ro: string, quantity: number) {
-  if (quantity < 0) throw new Error("Stok tidak boleh negatif.");
-  balances.set(balKey(skuId, ro), {
-    skuId,
-    regionalOffice: ro,
-    quantity,
-    updatedAt: nowIso(),
-  });
-}
-
-export function listPeripheralSkus(opts?: {
+export async function listPeripheralSkus(opts?: {
   category?: PeripheralCategory;
   activeOnly?: boolean;
   q?: string;
-}): PeripheralSku[] {
-  const q = opts?.q?.trim().toLowerCase();
-  return skus
-    .filter((s) => (opts?.activeOnly ? s.isActive : true))
-    .filter((s) => (opts?.category ? s.category === opts.category : true))
-    .filter((s) =>
-      q
-        ? s.skuCode.toLowerCase().includes(q) ||
-          s.name.toLowerCase().includes(q)
-        : true
-    )
-    .map((s) => ({ ...s }))
-    .sort((a, b) => a.skuCode.localeCompare(b.skuCode));
+}): Promise<PeripheralSku[]> {
+  const q = opts?.q?.trim();
+  const rows = await prisma.peripheralSku.findMany({
+    where: {
+      ...(opts?.activeOnly ? { isActive: true } : {}),
+      ...(opts?.category ? { category: opts.category } : {}),
+      ...(q
+        ? {
+            OR: [
+              { skuCode: { contains: q, mode: "insensitive" } },
+              { name: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: { skuCode: "asc" },
+  });
+  return rows.map(mapSku);
 }
 
-export function findPeripheralSku(id: string): PeripheralSku | null {
-  const found = skus.find((s) => s.id === id);
-  return found ? { ...found } : null;
+export async function findPeripheralSku(id: string): Promise<PeripheralSku | null> {
+  const row = await prisma.peripheralSku.findUnique({ where: { id } });
+  return row ? mapSku(row) : null;
 }
 
-export function listStockBalances(opts?: {
+export async function listStockBalances(opts?: {
   skuId?: string;
   regionalOffice?: string;
-}): StockBalance[] {
-  return [...balances.values()]
-    .filter((b) => (opts?.skuId ? b.skuId === opts.skuId : true))
-    .filter((b) =>
-      opts?.regionalOffice ? b.regionalOffice === opts.regionalOffice : true
-    )
-    .map((b) => ({ ...b }))
-    .sort(
-      (a, b) =>
-        a.regionalOffice.localeCompare(b.regionalOffice) ||
-        a.skuId.localeCompare(b.skuId)
-    );
+}): Promise<StockBalance[]> {
+  const rows = await prisma.peripheralBalance.findMany({
+    where: {
+      ...(opts?.skuId ? { skuId: opts.skuId } : {}),
+      ...(opts?.regionalOffice
+        ? { regionalOffice: opts.regionalOffice }
+        : {}),
+    },
+    orderBy: [{ regionalOffice: "asc" }, { skuId: "asc" }],
+  });
+  return rows.map(mapBalance);
 }
 
 export interface StockAlertRow {
@@ -231,19 +232,25 @@ export interface StockAlertRow {
   belowMin: boolean;
 }
 
-export function listStockAlerts(): StockAlertRow[] {
+export async function listStockAlerts(): Promise<StockAlertRow[]> {
+  const skus = await prisma.peripheralSku.findMany({
+    where: { isActive: true },
+    include: { balances: true },
+  });
   const rows: StockAlertRow[] = [];
-  for (const sku of skus.filter((s) => s.isActive)) {
+  for (const sku of skus) {
+    const byRo = new Map(
+      sku.balances.map((b) => [b.regionalOffice, b.quantity] as const)
+    );
     for (const ro of REGIONAL_OFFICES) {
-      const quantity = getQty(sku.id, ro);
-      const belowMin = quantity < sku.minStock;
-      if (belowMin) {
+      const quantity = byRo.get(ro) ?? 0;
+      if (quantity < sku.minStock) {
         rows.push({
           skuId: sku.id,
           skuCode: sku.skuCode,
           name: sku.name,
-          category: sku.category,
-          unit: sku.unit,
+          category: sku.category as PeripheralCategory,
+          unit: sku.unit as PeripheralUnit,
           regionalOffice: ro,
           quantity,
           minStock: sku.minStock,
@@ -255,14 +262,15 @@ export function listStockAlerts(): StockAlertRow[] {
   return rows.sort((a, b) => a.quantity - b.quantity);
 }
 
-export function peripheralKpis() {
-  const active = skus.filter((s) => s.isActive);
-  const alerts = listStockAlerts();
-  let totalQty = 0;
-  for (const b of balances.values()) totalQty += b.quantity;
+export async function peripheralKpis() {
+  const [skuCount, qtyAgg, alerts] = await Promise.all([
+    prisma.peripheralSku.count({ where: { isActive: true } }),
+    prisma.peripheralBalance.aggregate({ _sum: { quantity: true } }),
+    listStockAlerts(),
+  ]);
   return {
-    skuCount: active.length,
-    totalQuantity: totalQty,
+    skuCount,
+    totalQuantity: qtyAgg._sum.quantity ?? 0,
     alertCount: alerts.length,
     roCount: REGIONAL_OFFICES.length,
   };
@@ -278,71 +286,81 @@ export interface PeripheralSkuInput {
   isActive?: boolean;
 }
 
-export function createPeripheralSku(input: PeripheralSkuInput): PeripheralSku {
+export async function createPeripheralSku(
+  input: PeripheralSkuInput
+): Promise<PeripheralSku> {
   const code = input.skuCode.trim().toUpperCase();
   if (!code) throw new Error("SKU code wajib diisi.");
   if (!input.name?.trim()) throw new Error("Nama wajib diisi.");
   assertCategory(input.category);
-  if (skus.some((s) => s.skuCode === code)) {
-    throw new Error(`SKU "${code}" sudah ada.`);
-  }
-  const row: PeripheralSku = {
-    id: `sku-${Date.now()}`,
-    skuCode: code,
-    name: input.name.trim(),
-    category: input.category,
-    unit: input.unit,
-    minStock: input.minStock ?? DEFAULT_PERIPHERAL_MIN_STOCK,
-    notes: input.notes?.trim() || null,
-    isActive: input.isActive ?? true,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-  };
-  skus = [...skus, row];
-  for (const ro of REGIONAL_OFFICES) {
-    setQty(row.id, ro, 0);
-  }
-  return { ...row };
+
+  const dup = await prisma.peripheralSku.findUnique({
+    where: { skuCode: code },
+  });
+  if (dup) throw new Error(`SKU "${code}" sudah ada.`);
+
+  const row = await prisma.$transaction(async (tx) => {
+    const created = await tx.peripheralSku.create({
+      data: {
+        skuCode: code,
+        name: input.name.trim(),
+        category: input.category,
+        unit: input.unit,
+        minStock: input.minStock ?? DEFAULT_PERIPHERAL_MIN_STOCK,
+        notes: input.notes?.trim() || null,
+        isActive: input.isActive ?? true,
+      },
+    });
+    await tx.peripheralBalance.createMany({
+      data: REGIONAL_OFFICES.map((ro) => ({
+        skuId: created.id,
+        regionalOffice: ro,
+        quantity: 0,
+      })),
+    });
+    return created;
+  });
+
+  return mapSku(row);
 }
 
-export function updatePeripheralSku(
+export async function updatePeripheralSku(
   id: string,
   input: Partial<PeripheralSkuInput>
-): PeripheralSku {
-  const idx = skus.findIndex((s) => s.id === id);
-  if (idx < 0) throw new Error("SKU tidak ditemukan.");
-  const current = skus[idx]!;
+): Promise<PeripheralSku> {
+  const current = await prisma.peripheralSku.findUnique({ where: { id } });
+  if (!current) throw new Error("SKU tidak ditemukan.");
+
   const nextCode = (input.skuCode ?? current.skuCode).trim().toUpperCase();
-  if (skus.some((s) => s.skuCode === nextCode && s.id !== id)) {
-    throw new Error(`SKU "${nextCode}" sudah ada.`);
-  }
   if (input.category) assertCategory(input.category);
-  const updated: PeripheralSku = {
-    ...current,
-    skuCode: nextCode,
-    name: (input.name ?? current.name).trim(),
-    category: input.category ?? current.category,
-    unit: input.unit ?? current.unit,
-    minStock: input.minStock ?? current.minStock,
-    notes:
-      input.notes !== undefined
-        ? input.notes.trim() || null
-        : current.notes,
-    isActive: input.isActive ?? current.isActive,
-    updatedAt: nowIso(),
-  };
-  skus[idx] = updated;
-  return { ...updated };
+
+  const dup = await prisma.peripheralSku.findFirst({
+    where: { skuCode: nextCode, NOT: { id } },
+  });
+  if (dup) throw new Error(`SKU "${nextCode}" sudah ada.`);
+
+  const row = await prisma.peripheralSku.update({
+    where: { id },
+    data: {
+      skuCode: nextCode,
+      name: (input.name ?? current.name).trim(),
+      category: input.category ?? current.category,
+      unit: input.unit ?? current.unit,
+      minStock: input.minStock ?? current.minStock,
+      notes:
+        input.notes !== undefined
+          ? input.notes.trim() || null
+          : current.notes,
+      isActive: input.isActive ?? current.isActive,
+    },
+  });
+  return mapSku(row);
 }
 
-export function deletePeripheralSku(id: string): void {
-  const row = skus.find((s) => s.id === id);
+export async function deletePeripheralSku(id: string): Promise<void> {
+  const row = await prisma.peripheralSku.findUnique({ where: { id } });
   if (!row) throw new Error("SKU tidak ditemukan.");
-  skus = skus.filter((s) => s.id !== id);
-  for (const key of [...balances.keys()]) {
-    if (key.startsWith(`${id}::`)) balances.delete(key);
-  }
-  mutations = mutations.filter((m) => m.skuId !== id);
+  await prisma.peripheralSku.delete({ where: { id } });
 }
 
 export interface StockMutateInput {
@@ -356,11 +374,11 @@ export interface StockMutateInput {
   mutatedBy?: string;
 }
 
-export function mutatePeripheralStock(input: StockMutateInput): {
+export async function mutatePeripheralStock(input: StockMutateInput): Promise<{
   balances: StockBalance[];
   mutation: StockMutation;
-} {
-  const sku = findPeripheralSku(input.skuId);
+}> {
+  const sku = await findPeripheralSku(input.skuId);
   if (!sku) throw new Error("SKU tidak ditemukan.");
   const type = assertMutation(input.type);
   const qty = Number(input.quantity);
@@ -368,80 +386,153 @@ export function mutatePeripheralStock(input: StockMutateInput): {
     throw new Error("Quantity harus angka > 0.");
   }
 
-  if (type === "TRANSFER") {
-    const fromRo = input.fromRo?.trim();
-    const toRo = input.toRo?.trim();
-    if (!fromRo || !toRo) throw new Error("fromRo dan toRo wajib untuk TRANSFER.");
-    if (fromRo === toRo) throw new Error("RO asal dan tujuan harus berbeda.");
-    const fromQty = getQty(sku.id, fromRo);
-    if (fromQty < qty) {
-      throw new Error(`Stok ${fromRo} tidak cukup (tersedia ${fromQty}).`);
+  const mutation = await prisma.$transaction(async (tx) => {
+    if (type === "TRANSFER") {
+      const fromRo = input.fromRo?.trim();
+      const toRo = input.toRo?.trim();
+      if (!fromRo || !toRo) {
+        throw new Error("fromRo dan toRo wajib untuk TRANSFER.");
+      }
+      if (fromRo === toRo) {
+        throw new Error("RO asal dan tujuan harus berbeda.");
+      }
+
+      const fromBal = await tx.peripheralBalance.findUnique({
+        where: {
+          skuId_regionalOffice: { skuId: sku.id, regionalOffice: fromRo },
+        },
+      });
+      const fromQty = fromBal?.quantity ?? 0;
+      if (fromQty < qty) {
+        throw new Error(`Stok ${fromRo} tidak cukup (tersedia ${fromQty}).`);
+      }
+
+      await tx.peripheralBalance.upsert({
+        where: {
+          skuId_regionalOffice: { skuId: sku.id, regionalOffice: fromRo },
+        },
+        update: { quantity: fromQty - qty },
+        create: { skuId: sku.id, regionalOffice: fromRo, quantity: fromQty - qty },
+      });
+      const toBal = await tx.peripheralBalance.findUnique({
+        where: {
+          skuId_regionalOffice: { skuId: sku.id, regionalOffice: toRo },
+        },
+      });
+      await tx.peripheralBalance.upsert({
+        where: {
+          skuId_regionalOffice: { skuId: sku.id, regionalOffice: toRo },
+        },
+        update: { quantity: (toBal?.quantity ?? 0) + qty },
+        create: {
+          skuId: sku.id,
+          regionalOffice: toRo,
+          quantity: (toBal?.quantity ?? 0) + qty,
+        },
+      });
+
+      return tx.peripheralMutation.create({
+        data: {
+          skuId: sku.id,
+          type: type as PrismaMutationType,
+          quantity: qty,
+          fromRo,
+          toRo,
+          notes: input.notes?.trim() || null,
+          mutatedBy: input.mutatedBy ?? null,
+        },
+      });
     }
-    setQty(sku.id, fromRo, fromQty - qty);
-    setQty(sku.id, toRo, getQty(sku.id, toRo) + qty);
-    const mutation: StockMutation = {
-      id: `smut-${Date.now()}`,
-      skuId: sku.id,
-      type,
-      quantity: qty,
-      fromRo,
-      toRo,
-      notes: input.notes?.trim() || null,
-      mutatedAt: nowIso(),
-      mutatedBy: input.mutatedBy ?? null,
-    };
-    mutations = [mutation, ...mutations].slice(0, 200);
-    return {
-      balances: listStockBalances({ skuId: sku.id }),
-      mutation,
-    };
-  }
 
-  const ro = (input.regionalOffice ?? input.toRo ?? input.fromRo)?.trim();
-  if (!ro) throw new Error("regionalOffice wajib diisi.");
+    const ro = (input.regionalOffice ?? input.toRo ?? input.fromRo)?.trim();
+    if (!ro) throw new Error("regionalOffice wajib diisi.");
 
-  const current = getQty(sku.id, ro);
-  if (type === "IN") {
-    setQty(sku.id, ro, current + qty);
-  } else if (type === "OUT") {
-    if (current < qty) {
-      throw new Error(`Stok ${ro} tidak cukup (tersedia ${current}).`);
-    }
-    setQty(sku.id, ro, current - qty);
-  } else if (type === "ADJUST") {
-    setQty(sku.id, ro, qty);
-  }
+    const currentBal = await tx.peripheralBalance.findUnique({
+      where: {
+        skuId_regionalOffice: { skuId: sku.id, regionalOffice: ro },
+      },
+    });
+    const current = currentBal?.quantity ?? 0;
+    let next = current;
+    if (type === "IN") next = current + qty;
+    else if (type === "OUT") {
+      if (current < qty) {
+        throw new Error(`Stok ${ro} tidak cukup (tersedia ${current}).`);
+      }
+      next = current - qty;
+    } else if (type === "ADJUST") next = qty;
 
-  const mutation: StockMutation = {
-    id: `smut-${Date.now()}`,
-    skuId: sku.id,
-    type,
-    quantity: qty,
-    fromRo: type === "OUT" ? ro : null,
-    toRo: type === "IN" || type === "ADJUST" ? ro : null,
-    notes: input.notes?.trim() || null,
-    mutatedAt: nowIso(),
-    mutatedBy: input.mutatedBy ?? null,
-  };
-  mutations = [mutation, ...mutations].slice(0, 200);
+    await tx.peripheralBalance.upsert({
+      where: {
+        skuId_regionalOffice: { skuId: sku.id, regionalOffice: ro },
+      },
+      update: { quantity: next },
+      create: { skuId: sku.id, regionalOffice: ro, quantity: next },
+    });
+
+    return tx.peripheralMutation.create({
+      data: {
+        skuId: sku.id,
+        type: type as PrismaMutationType,
+        quantity: qty,
+        fromRo: type === "OUT" ? ro : null,
+        toRo: type === "IN" || type === "ADJUST" ? ro : null,
+        notes: input.notes?.trim() || null,
+        mutatedBy: input.mutatedBy ?? null,
+      },
+    });
+  });
+
   return {
-    balances: listStockBalances({ skuId: sku.id }),
-    mutation,
+    balances: await listStockBalances({ skuId: sku.id }),
+    mutation: mapMutation(mutation),
   };
 }
 
-export function listStockMutations(skuId?: string, limit = 50): StockMutation[] {
-  return mutations
-    .filter((m) => (skuId ? m.skuId === skuId : true))
-    .slice(0, limit)
-    .map((m) => ({ ...m }));
+export async function listStockMutations(
+  skuId?: string,
+  limit = 50
+): Promise<StockMutation[]> {
+  const rows = await prisma.peripheralMutation.findMany({
+    where: skuId ? { skuId } : undefined,
+    orderBy: { mutatedAt: "desc" },
+    take: limit,
+  });
+  return rows.map(mapMutation);
 }
 
-export function resetPeripherals(): {
+export async function resetPeripherals(): Promise<{
   skus: PeripheralSku[];
-  kpis: ReturnType<typeof peripheralKpis>;
-} {
-  skus = seedSkus.map((s) => ({ ...s }));
-  resetBalancesFromSeed();
-  return { skus: listPeripheralSkus(), kpis: peripheralKpis() };
+  kpis: Awaited<ReturnType<typeof peripheralKpis>>;
+}> {
+  await prisma.$transaction(async (tx) => {
+    await tx.peripheralMutation.deleteMany();
+    await tx.peripheralBalance.deleteMany();
+    await tx.peripheralSku.deleteMany();
+
+    for (const s of SEED_SKUS) {
+      await tx.peripheralSku.create({
+        data: {
+          id: s.id,
+          skuCode: s.skuCode,
+          name: s.name,
+          category: s.category,
+          unit: s.unit,
+          minStock: s.minStock,
+          notes: s.notes ?? null,
+          isActive: true,
+        },
+      });
+    }
+    for (const [skuId, ro, qty] of SEED_BALANCES) {
+      await tx.peripheralBalance.create({
+        data: { skuId, regionalOffice: ro, quantity: qty },
+      });
+    }
+  });
+
+  return {
+    skus: await listPeripheralSkus(),
+    kpis: await peripheralKpis(),
+  };
 }

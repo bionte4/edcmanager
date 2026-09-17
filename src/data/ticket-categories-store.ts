@@ -5,16 +5,47 @@ import {
   type SlaProfile,
   type TicketCategoryDef,
 } from "@/config/ticket-category.config";
+import { prisma } from "@/lib/prisma";
+import type { TicketCategoryDef as PrismaTicketCategoryDef } from "@prisma/client";
 
 function clone(c: TicketCategoryDef): TicketCategoryDef {
   return { ...c };
 }
 
+function mapRow(row: PrismaTicketCategoryDef): TicketCategoryDef {
+  return {
+    id: row.id,
+    code: row.code,
+    label: row.label,
+    slaProfile: row.slaProfile,
+    description: row.description ?? undefined,
+    sortOrder: row.sortOrder,
+    isActive: row.isActive,
+  };
+}
+
+/** In-memory cache; seeded with defaults until DB refresh completes. */
 let categories: TicketCategoryDef[] = DEFAULT_TICKET_CATEGORIES.map(clone);
 
-export function listTicketCategories(opts?: {
+export async function refreshTicketCategoryCache(): Promise<void> {
+  try {
+    const rows = await prisma.ticketCategoryDef.findMany({
+      orderBy: [{ sortOrder: "asc" }, { code: "asc" }],
+    });
+    categories =
+      rows.length > 0
+        ? rows.map(mapRow)
+        : DEFAULT_TICKET_CATEGORIES.map(clone);
+  } catch {
+    categories = DEFAULT_TICKET_CATEGORIES.map(clone);
+  }
+}
+
+void refreshTicketCategoryCache();
+
+export async function listTicketCategories(opts?: {
   activeOnly?: boolean;
-}): TicketCategoryDef[] {
+}): Promise<TicketCategoryDef[]> {
   return categories
     .filter((c) => (opts?.activeOnly ? c.isActive : true))
     .map(clone)
@@ -27,10 +58,12 @@ export function findCategoryByCode(code: string): TicketCategoryDef | null {
   return found ? clone(found) : null;
 }
 
+/** Sync read from cache — safe for SLA engine hot paths. */
 export function getCategorySlaProfile(code: string): SlaProfile {
   return slaProfileFromCatalog(code, categories);
 }
 
+/** Sync read from cache. */
 export function getCategoryLabel(code: string): string {
   return findCategoryByCode(code)?.label ?? code;
 }
@@ -54,66 +87,94 @@ function validate(input: TicketCategoryInput, exceptId?: string): void {
   if (input.slaProfile !== "VIP" && input.slaProfile !== "NON_VIP") {
     throw new Error("slaProfile harus VIP atau NON_VIP.");
   }
-  const dup = categories.find(
-    (c) => c.code === code && c.id !== exceptId
-  );
+  const dup = categories.find((c) => c.code === code && c.id !== exceptId);
   if (dup) throw new Error(`Kode kategori "${code}" sudah dipakai.`);
 }
 
-export function createTicketCategory(input: TicketCategoryInput): TicketCategoryDef {
+export async function createTicketCategory(
+  input: TicketCategoryInput
+): Promise<TicketCategoryDef> {
   validate(input);
-  const row: TicketCategoryDef = {
-    id: `cat-${Date.now()}`,
-    code: normalizeCategoryCode(input.code),
-    label: input.label.trim(),
-    slaProfile: input.slaProfile,
-    description: input.description?.trim() || undefined,
-    sortOrder: input.sortOrder ?? 100,
-    isActive: input.isActive ?? true,
-  };
-  categories = [...categories, row];
-  return clone(row);
+  const row = await prisma.ticketCategoryDef.create({
+    data: {
+      code: normalizeCategoryCode(input.code),
+      label: input.label.trim(),
+      slaProfile: input.slaProfile,
+      description: input.description?.trim() || null,
+      sortOrder: input.sortOrder ?? 100,
+      isActive: input.isActive ?? true,
+    },
+  });
+  await refreshTicketCategoryCache();
+  return mapRow(row);
 }
 
-export function updateTicketCategory(
+export async function updateTicketCategory(
   id: string,
   input: Partial<TicketCategoryInput>
-): TicketCategoryDef {
-  const idx = categories.findIndex((c) => c.id === id);
-  if (idx < 0) throw new Error("Kategori tidak ditemukan.");
-  const current = categories[idx]!;
+): Promise<TicketCategoryDef> {
+  const existing =
+    categories.find((c) => c.id === id) ??
+    (await prisma.ticketCategoryDef.findUnique({ where: { id } }).then((r) =>
+      r ? mapRow(r) : null
+    ));
+  if (!existing) throw new Error("Kategori tidak ditemukan.");
+
   const next: TicketCategoryInput = {
-    code: input.code ?? current.code,
-    label: input.label ?? current.label,
-    slaProfile: input.slaProfile ?? current.slaProfile,
-    description: input.description ?? current.description,
-    sortOrder: input.sortOrder ?? current.sortOrder,
-    isActive: input.isActive ?? current.isActive,
+    code: input.code ?? existing.code,
+    label: input.label ?? existing.label,
+    slaProfile: input.slaProfile ?? existing.slaProfile,
+    description: input.description ?? existing.description,
+    sortOrder: input.sortOrder ?? existing.sortOrder,
+    isActive: input.isActive ?? existing.isActive,
   };
   validate(next, id);
-  const updated: TicketCategoryDef = {
-    ...current,
-    code: normalizeCategoryCode(next.code),
-    label: next.label.trim(),
-    slaProfile: next.slaProfile,
-    description: next.description?.trim() || undefined,
-    sortOrder: next.sortOrder ?? 100,
-    isActive: next.isActive ?? true,
-  };
-  categories[idx] = updated;
-  return clone(updated);
+  const row = await prisma.ticketCategoryDef.update({
+    where: { id },
+    data: {
+      code: normalizeCategoryCode(next.code),
+      label: next.label.trim(),
+      slaProfile: next.slaProfile,
+      description: next.description?.trim() || null,
+      sortOrder: next.sortOrder ?? 100,
+      isActive: next.isActive ?? true,
+    },
+  });
+  await refreshTicketCategoryCache();
+  return mapRow(row);
 }
 
-export function deleteTicketCategory(id: string): void {
-  const row = categories.find((c) => c.id === id);
+export async function deleteTicketCategory(id: string): Promise<void> {
+  const row =
+    categories.find((c) => c.id === id) ??
+    (await prisma.ticketCategoryDef.findUnique({ where: { id } }).then((r) =>
+      r ? mapRow(r) : null
+    ));
   if (!row) throw new Error("Kategori tidak ditemukan.");
   if (row.code === "VIP" || row.code === "NON_VIP") {
-    throw new Error("Kategori bawaan VIP / NON_VIP tidak boleh dihapus (bisa di-nonaktifkan).");
+    throw new Error(
+      "Kategori bawaan VIP / NON_VIP tidak boleh dihapus (bisa di-nonaktifkan)."
+    );
   }
-  categories = categories.filter((c) => c.id !== id);
+  await prisma.ticketCategoryDef.delete({ where: { id } });
+  await refreshTicketCategoryCache();
 }
 
-export function resetTicketCategories(): TicketCategoryDef[] {
-  categories = DEFAULT_TICKET_CATEGORIES.map(clone);
+export async function resetTicketCategories(): Promise<TicketCategoryDef[]> {
+  await prisma.$transaction(async (tx) => {
+    await tx.ticketCategoryDef.deleteMany();
+    await tx.ticketCategoryDef.createMany({
+      data: DEFAULT_TICKET_CATEGORIES.map((c) => ({
+        id: c.id,
+        code: c.code,
+        label: c.label,
+        slaProfile: c.slaProfile,
+        description: c.description ?? null,
+        sortOrder: c.sortOrder,
+        isActive: c.isActive,
+      })),
+    });
+  });
+  await refreshTicketCategoryCache();
   return listTicketCategories();
 }

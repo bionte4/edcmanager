@@ -26,7 +26,7 @@ async function requireUser(): Promise<AuthUser> {
   if (!token) throw new Error("Unauthorized");
   const session = await verifySessionToken(token);
   if (!session) throw new Error("Unauthorized");
-  const stored = findUserById(session.sub);
+  const stored = await findUserById(session.sub);
   if (!stored || !stored.isActive) throw new Error("Unauthorized");
   return sessionToAuthUser(session);
 }
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
 
     if (action === "template") {
       return excelResponse(
-        buildRosterTemplateBuffer({
+        await buildRosterTemplateBuffer({
           mode: (url.searchParams.get("mode") as RosterPeriodMode) ?? "week",
           anchor: url.searchParams.get("anchor") ?? undefined,
           from: url.searchParams.get("from") ?? undefined,
@@ -85,7 +85,7 @@ export async function GET(request: Request) {
     }
 
     return excelResponse(
-      buildRosterExportBuffer(period.from, period.to),
+      await buildRosterExportBuffer(period.from, period.to),
       `edc-roster-${period.from}_${period.to}.xlsx`
     );
   } catch (e) {
@@ -127,12 +127,12 @@ export async function POST(request: Request) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const rows = parseRosterWorkbook(buffer);
-    const result = importRosterRows(rows, { mode: importMode });
+    const result = await importRosterRows(rows, { mode: importMode });
 
     return NextResponse.json({
       result,
-      kpis: wfmKpis(),
-      shifts: listWfmShifts({ from: result.from, to: result.to }),
+      kpis: await wfmKpis(),
+      shifts: await listWfmShifts({ from: result.from, to: result.to }),
     });
   } catch (e) {
     return NextResponse.json(

@@ -29,7 +29,7 @@ async function requireUser(): Promise<AuthUser> {
   if (!token) throw new Error("Unauthorized");
   const session = await verifySessionToken(token);
   if (!session) throw new Error("Unauthorized");
-  const stored = findUserById(session.sub);
+  const stored = await findUserById(session.sub);
   if (!stored || !stored.isActive) throw new Error("Unauthorized");
   return sessionToAuthUser(session);
 }
@@ -53,22 +53,31 @@ export async function GET(request: Request) {
     const view = searchParams.get("view");
 
     if (view === "alerts") {
-      return NextResponse.json({
-        alerts: listStockAlerts(),
-        kpis: peripheralKpis(),
-      });
+      const [alerts, kpis] = await Promise.all([
+        listStockAlerts(),
+        peripheralKpis(),
+      ]);
+      return NextResponse.json({ alerts, kpis });
     }
 
-    return NextResponse.json({
-      skus: listPeripheralSkus({
+    const [skus, balances, mutations, alerts, kpis] = await Promise.all([
+      listPeripheralSkus({
         category: category || undefined,
         activeOnly,
         q,
       }),
-      balances: listStockBalances({ skuId }),
-      mutations: listStockMutations(skuId),
-      alerts: listStockAlerts(),
-      kpis: peripheralKpis(),
+      listStockBalances({ skuId }),
+      listStockMutations(skuId),
+      listStockAlerts(),
+      peripheralKpis(),
+    ]);
+
+    return NextResponse.json({
+      skus,
+      balances,
+      mutations,
+      alerts,
+      kpis,
     });
   } catch (e) {
     return NextResponse.json(
@@ -89,24 +98,24 @@ export async function POST(request: Request) {
     );
 
     if (body.action === "reset") {
-      return NextResponse.json(resetPeripherals());
+      return NextResponse.json(await resetPeripherals());
     }
 
     if (body.action === "mutate") {
-      const result = mutatePeripheralStock({
+      const result = await mutatePeripheralStock({
         ...(body as StockMutateInput),
         mutatedBy: user.name,
       });
       return NextResponse.json({
         ...result,
-        kpis: peripheralKpis(),
-        alerts: listStockAlerts(),
+        kpis: await peripheralKpis(),
+        alerts: await listStockAlerts(),
       });
     }
 
-    const sku = createPeripheralSku(body as PeripheralSkuInput);
+    const sku = await createPeripheralSku(body as PeripheralSkuInput);
     return NextResponse.json(
-      { sku, kpis: peripheralKpis() },
+      { sku, kpis: await peripheralKpis() },
       { status: 201 }
     );
   } catch (e) {
@@ -126,8 +135,8 @@ export async function PATCH(request: Request) {
     };
     if (!body.id) throw new Error("id wajib diisi.");
     const { id, ...rest } = body;
-    const sku = updatePeripheralSku(id, rest);
-    return NextResponse.json({ sku, kpis: peripheralKpis() });
+    const sku = await updatePeripheralSku(id, rest);
+    return NextResponse.json({ sku, kpis: await peripheralKpis() });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Error" },
@@ -143,8 +152,8 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (!id) throw new Error("id wajib diisi.");
-    deletePeripheralSku(id);
-    return NextResponse.json({ ok: true, kpis: peripheralKpis() });
+    await deletePeripheralSku(id);
+    return NextResponse.json({ ok: true, kpis: await peripheralKpis() });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Error" },

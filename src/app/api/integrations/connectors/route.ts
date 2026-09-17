@@ -31,7 +31,7 @@ async function requireAdmin(): Promise<AuthUser> {
   if (!token) throw new Error("Unauthorized");
   const session = await verifySessionToken(token);
   if (!session) throw new Error("Unauthorized");
-  const stored = findUserById(session.sub);
+  const stored = await findUserById(session.sub);
   if (!stored || !stored.isActive) throw new Error("Unauthorized");
   const user = sessionToAuthUser(session);
   assertCan(user, "admin:access");
@@ -45,14 +45,14 @@ function statusFor(e: unknown): number {
   return 400;
 }
 
-function allViews() {
+async function allViews() {
   return {
     email: publicEmailView(),
     smtp: publicSmtpView(),
     ai: publicAiView(),
     api: {
       configured: true,
-      activeClients: countActiveIntegrationClients(),
+      activeClients: await countActiveIntegrationClients(),
       basePath: "/api/v1",
     },
   };
@@ -61,7 +61,7 @@ function allViews() {
 export async function GET() {
   try {
     await requireAdmin();
-    return NextResponse.json(allViews());
+    return NextResponse.json(await allViews());
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Forbidden" },
@@ -100,17 +100,17 @@ export async function PATCH(request: Request) {
 
     if (body.connector === "email" || body.email) {
       updateEmailSettings(body.email ?? {});
-      return NextResponse.json(allViews());
+      return NextResponse.json(await allViews());
     }
 
     if (body.connector === "smtp" || body.smtp) {
       updateSmtpSettings(body.smtp ?? {});
-      return NextResponse.json(allViews());
+      return NextResponse.json(await allViews());
     }
 
     if (body.connector === "ai" || body.ai) {
       updateAiSettings(body.ai ?? {});
-      return NextResponse.json(allViews());
+      return NextResponse.json(await allViews());
     }
 
     return NextResponse.json(
@@ -236,7 +236,7 @@ export async function POST(request: Request) {
     }
 
     if (body.target === "api") {
-      const clients = listIntegrationClients(false);
+      const clients = await listIntegrationClients(false);
       const active = clients.filter((c) => c.isActive);
       if (active.length === 0) {
         return NextResponse.json({

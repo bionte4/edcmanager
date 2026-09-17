@@ -21,7 +21,7 @@ async function requireUser(): Promise<AuthUser> {
   if (!token) throw new Error("Unauthorized");
   const session = await verifySessionToken(token);
   if (!session) throw new Error("Unauthorized");
-  const stored = findUserById(session.sub);
+  const stored = await findUserById(session.sub);
   if (!stored || !stored.isActive) throw new Error("Unauthorized");
   return sessionToAuthUser(session);
 }
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     }
 
     return excelResponse(
-      buildAssetsExportBuffer(),
+      await buildAssetsExportBuffer(),
       `edc-assets-export-${stamp}.xlsx`
     );
   } catch (e) {
@@ -97,11 +97,11 @@ export async function POST(request: Request) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const rows = parseAssetsWorkbook(buffer);
-    const result = importAssetRows(rows, { actorName: user.name });
+    const result = await importAssetRows(rows, { actorName: user.name });
 
     return NextResponse.json({
       result,
-      kpis: assetKpis(),
+      kpis: await assetKpis(),
     });
   } catch (e) {
     return NextResponse.json(

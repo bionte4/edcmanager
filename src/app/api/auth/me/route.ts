@@ -20,7 +20,7 @@ export async function GET() {
     return NextResponse.json({ user: null }, { status: 401 });
   }
 
-  const stored = findUserById(session.sub);
+  const stored = await findUserById(session.sub);
   if (!stored || !stored.isActive) {
     return NextResponse.json({ user: null }, { status: 401 });
   }

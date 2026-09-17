@@ -30,7 +30,7 @@ export async function GET() {
       api: {
         id: "rest-api",
         configured: true,
-        activeClients: countActiveIntegrationClients(),
+        activeClients: await countActiveIntegrationClients(),
         basePath: "/api/v1",
       },
     });

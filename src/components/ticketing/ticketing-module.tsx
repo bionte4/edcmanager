@@ -26,7 +26,6 @@ import {
   type OperationalProcess,
 } from "@/config/itsm.config";
 import { DEMO_AS_OF, LOCATION_LABELS, CATEGORY_LABELS, SLA_LABELS } from "@/data/dashboard";
-import { MOCK_OPS_TICKETS, MOCK_USERS } from "@/data/noc";
 import {
   assignTicket,
   createTicket,
@@ -41,6 +40,30 @@ import { AiInsightPanel } from "@/components/ai/ai-insight-panel";
 import type { TicketCategory, TicketLocation } from "@/config/sla.config";
 import { formatDateTime } from "@/lib/utils";
 import { OLA_STATUS_LABELS, type OlaPolicy } from "@/ola";
+
+const FALLBACK_USERS: NocUser[] = [
+  {
+    id: "u-noc-1",
+    name: "Andi Pratama",
+    email: "andi.noc@edc.local",
+    role: "NOC",
+    isActive: true,
+  },
+  {
+    id: "u-noc-2",
+    name: "Siti Rahma",
+    email: "siti.noc@edc.local",
+    role: "NOC",
+    isActive: true,
+  },
+  {
+    id: "u-sup-1",
+    name: "Dewi Lestari",
+    email: "dewi.supervisor@edc.local",
+    role: "SUPERVISOR",
+    isActive: true,
+  },
+];
 
 function slaVariant(status: string): "safe" | "warning" | "breached" | "secondary" {
   if (status === "ON_TRACK" || status === "ACHIEVED") return "safe";
@@ -59,7 +82,7 @@ const ITSM_FILTERS: Array<ItsmType | "ALL"> = [
 
 export function TicketingModule() {
   const { user } = useAuth();
-  const [tickets, setTickets] = useState<OpsTicket[]>(MOCK_OPS_TICKETS);
+  const [tickets, setTickets] = useState<OpsTicket[]>([]);
   const [olaPolicies, setOlaPolicies] = useState<OlaPolicy[] | null>(null);
   const [categories, setCategories] = useState<
     Array<{ code: string; label: string; slaProfile: string }>
@@ -67,7 +90,7 @@ export function TicketingModule() {
     { code: "VIP", label: "VIP", slaProfile: "VIP" },
     { code: "NON_VIP", label: "Non-VIP", slaProfile: "NON_VIP" },
   ]);
-  const [selectedId, setSelectedId] = useState<string | null>(MOCK_OPS_TICKETS[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<ItsmType | "ALL">("ALL");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -83,7 +106,20 @@ export function TicketingModule() {
   const [description, setDescription] = useState("");
   const [technicianName, setTechnicianName] = useState("");
   const [assignToId, setAssignToId] = useState("u-noc-1");
-  const [linkProblemId, setLinkProblemId] = useState("t-prb-1");
+  const [linkProblemId, setLinkProblemId] = useState("");
+
+  const loadTickets = useCallback(async () => {
+    try {
+      const res = await fetch("/api/tickets", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { tickets?: OpsTicket[] };
+      const list = data.tickets ?? [];
+      setTickets(list);
+      setSelectedId((prev) => prev ?? list[0]?.id ?? null);
+    } catch {
+      /* empty */
+    }
+  }, []);
 
   const loadOla = useCallback(async () => {
     try {
@@ -117,9 +153,10 @@ export function TicketingModule() {
   }, []);
 
   useEffect(() => {
+    void loadTickets();
     void loadOla();
     void loadCategories();
-  }, [loadOla, loadCategories]);
+  }, [loadTickets, loadOla, loadCategories]);
 
   const actor: NocUser | null = user
     ? {
@@ -130,7 +167,7 @@ export function TicketingModule() {
         isActive: user.isActive,
       }
     : null;
-  const nocCandidates = MOCK_USERS.filter(
+  const nocCandidates = FALLBACK_USERS.filter(
     (u) => u.role === "NOC" || u.role === "SUPERVISOR"
   );
 
@@ -241,7 +278,7 @@ export function TicketingModule() {
     level?: "WARNING" | "BREACHED"
   ) {
     if (!selected) return;
-    const owner = MOCK_USERS.find((u) => u.id === selected.nocOwnerId);
+    const owner = FALLBACK_USERS.find((u) => u.id === selected.nocOwnerId);
     const res = await fetch("/api/notifications", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

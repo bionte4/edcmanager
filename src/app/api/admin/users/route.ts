@@ -22,7 +22,7 @@ async function requireAdmin(): Promise<AuthUser> {
   if (!token) throw new Error("Unauthorized");
   const session = await verifySessionToken(token);
   if (!session) throw new Error("Unauthorized");
-  const stored = findUserById(session.sub);
+  const stored = await findUserById(session.sub);
   if (!stored || !stored.isActive) throw new Error("Unauthorized");
   const user = sessionToAuthUser(session);
   assertCan(user, "user:manage");
@@ -32,7 +32,7 @@ async function requireAdmin(): Promise<AuthUser> {
 export async function GET() {
   try {
     await requireAdmin();
-    const users = listUsers().map(toPublicUser);
+    const users = (await listUsers()).map(toPublicUser);
     return NextResponse.json({ users });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Forbidden";
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       password?: string;
       isActive?: boolean;
     };
-    const user = createUser({
+    const user = await createUser({
       name: body.name ?? "",
       email: body.email ?? "",
       phone: body.phone,
@@ -84,7 +84,7 @@ export async function PATCH(request: Request) {
     if (!body.id) {
       return NextResponse.json({ error: "id wajib." }, { status: 400 });
     }
-    const user = updateUser(body.id, {
+    const user = await updateUser(body.id, {
       name: body.name,
       email: body.email,
       phone: body.phone,
@@ -109,8 +109,8 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ error: "id wajib." }, { status: 400 });
     }
-    const user = deleteUser(id);
-    return NextResponse.json({ user: toPublicUser(user) });
+    await deleteUser(id);
+    return NextResponse.json({ ok: true });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Gagal hapus user";
     const status =

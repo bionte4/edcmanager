@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { DEMO_AS_OF } from "@/data/dashboard";
-import { buildOpsReport } from "@/data/reporting";
+import { listOpsTickets } from "@/data/tickets-store";
 import { findUserById } from "@/data/users-store";
 import {
   SESSION_COOKIE,
@@ -28,21 +27,16 @@ function statusFor(e: unknown): number {
   return 400;
 }
 
-function periodFromUrl(url: URL) {
-  const from = url.searchParams.get("from") ?? undefined;
-  const to = url.searchParams.get("to") ?? undefined;
-  const label = url.searchParams.get("label") ?? undefined;
-  if (!from || !to) return undefined;
-  return { from, to, label };
-}
-
-export async function GET(request: Request) {
+/**
+ * Authenticated ops UI ticket list (OpsTicket-shaped).
+ * SLA/OLA enrichment (e.g. DEMO_AS_OF) stays optional at the client.
+ */
+export async function GET() {
   try {
     const user = await requireUser();
-    assertCan(user, "report:read");
-    const period = periodFromUrl(new URL(request.url));
-    const report = await buildOpsReport(DEMO_AS_OF, period);
-    return NextResponse.json(report);
+    assertCan(user, "ticket:read");
+    const tickets = await listOpsTickets();
+    return NextResponse.json({ tickets });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Forbidden" },

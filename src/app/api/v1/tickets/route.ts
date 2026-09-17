@@ -26,9 +26,9 @@ function errorResponse(e: unknown) {
 
 export async function GET(request: Request) {
   try {
-    requireIntegrationClient(request, "tickets:read");
+    await requireIntegrationClient(request, "tickets:read");
     const { searchParams } = new URL(request.url);
-    const tickets = listIntegrationTickets({
+    const tickets = await listIntegrationTickets({
       itsmType: (searchParams.get("itsmType") as ItsmType) || undefined,
       status: (searchParams.get("status") as WorkflowTicketStatus) || undefined,
       externalSystem: searchParams.get("externalSystem") || undefined,
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const client = requireIntegrationClient(request, "tickets:write");
+    const client = await requireIntegrationClient(request, "tickets:write");
     const body = (await request.json()) as {
       merchantId?: string;
       location?: TicketLocation;
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       openedAt?: string;
     };
 
-    const ticket = createIntegrationTicket({
+    const ticket = await createIntegrationTicket({
       merchantId: body.merchantId ?? "",
       location: body.location ?? "DALAM_KOTA",
       category: body.category ?? "NON_VIP",

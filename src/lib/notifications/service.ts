@@ -58,7 +58,7 @@ async function dispatchEmail(input: {
         ? "SIMULATED"
         : "FAILED";
 
-  return addNotification({
+  return await addNotification({
     event: input.event,
     channel: "EMAIL",
     status,
@@ -112,7 +112,7 @@ export async function notifyTest(to?: string) {
       : result.mode === "simulated"
         ? "SIMULATED"
         : "FAILED";
-  return addNotification({
+  return await addNotification({
     event: "TEST",
     channel: "EMAIL",
     status,

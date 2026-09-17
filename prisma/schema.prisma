@@ -29,11 +29,6 @@ enum TicketLocation {
   LUAR_PULAU
 }
 
-enum TicketCategory {
-  VIP
-  NON_VIP
-}
-
 /// ITSM framework classification (Incident ≈ former CM tickets)
 enum ItsmType {
   INCIDENT
@@ -69,6 +64,11 @@ enum SlaStatus {
   WARNING
   ACHIEVED
   BREACHED
+}
+
+enum SlaProfile {
+  VIP
+  NON_VIP
 }
 
 enum MutationType {
@@ -285,7 +285,8 @@ model Ticket {
   process        OperationalProcess  @default(CM)
   merchantId     String
   location       TicketLocation
-  category       TicketCategory
+  /// Category code from TicketCategoryDef (VIP, NON_VIP, custom)
+  category       String
   status         TicketStatus        @default(OPEN)
   slaStatus      SlaStatus           @default(ON_TRACK)
   openedAt       DateTime
@@ -334,6 +335,9 @@ model Ticket {
   @@index([status])
   @@index([openedAt])
   @@index([merchantId])
+  @@index([status, openedAt])
+  @@index([slaStatus, status])
+  @@index([slaDeadlineAt])
   @@map("tickets")
 }
 
@@ -443,4 +447,194 @@ model AiInsight {
   @@index([ticketId])
   @@index([createdAt])
   @@map("ai_insights")
+}
+
+// ─── Configurable ticket categories (VIP / NON_VIP / custom) ─────────────────
+
+model TicketCategoryDef {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  label       String
+  slaProfile  SlaProfile
+  description String?
+  sortOrder   Int        @default(100)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@map("ticket_categories")
+}
+
+// ─── OLA policies ────────────────────────────────────────────────────────────
+
+enum OlaStage {
+  ACKNOWLEDGE
+  DISPATCH
+}
+
+model OlaPolicy {
+  id                String   @id @default(cuid())
+  name              String
+  stage             OlaStage
+  limitMinutes      Int
+  warningThreshold  Float    @default(0.8)
+  itsmType          String   @default("*")
+  location          String   @default("*")
+  category          String   @default("*")
+  process           String   @default("*")
+  priority          Int      @default(50)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([stage, isActive])
+  @@index([priority])
+  @@map("ola_policies")
+}
+
+// ─── WFM attendance & swap ───────────────────────────────────────────────────
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  NO_ROSTER
+  OUT_OF_WINDOW
+}
+
+enum AttendanceSource {
+  LOGIN
+  MANUAL
+}
+
+model AttendanceLog {
+  id        String            @id @default(cuid())
+  userId    String
+  userName  String
+  role      String
+  shiftId   String?
+  shiftDate DateTime          @db.Date
+  shiftType ShiftType?
+  status    AttendanceStatus
+  loggedAt  DateTime          @default(now())
+  source    AttendanceSource  @default(LOGIN)
+  note      String?
+
+  @@index([userId, shiftDate])
+  @@index([shiftDate])
+  @@index([loggedAt])
+  @@map("attendance_logs")
+}
+
+enum SwapRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model ShiftSwapRequest {
+  id               String            @id @default(cuid())
+  requesterId      String
+  requesterName    String
+  requesterShiftId String
+  targetUserId     String
+  targetUserName   String
+  targetShiftId    String
+  reason           String
+  status           SwapRequestStatus @default(PENDING)
+  createdAt        DateTime          @default(now())
+  decidedAt        DateTime?
+  decidedById      String?
+  decidedByName    String?
+  decisionNote     String?
+
+  @@index([status])
+  @@index([requesterId])
+  @@index([targetUserId])
+  @@map("shift_swap_requests")
+}
+
+// ─── Peripheral / consumable inventory ───────────────────────────────────────
+
+enum PeripheralCategory {
+  CABLE
+  PAPER_ROLL
+  SIM_CARD
+  SPARE_PART
+  OTHER
+}
+
+enum StockMutationType {
+  IN
+  OUT
+  TRANSFER
+  ADJUST
+}
+
+model PeripheralSku {
+  id        String              @id @default(cuid())
+  skuCode   String              @unique
+  name      String
+  category  PeripheralCategory
+  unit      String
+  minStock  Int                 @default(20)
+  notes     String?
+  isActive  Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  balances  PeripheralBalance[]
+  mutations PeripheralMutation[]
+
+  @@index([category, isActive])
+  @@map("peripheral_skus")
+}
+
+model PeripheralBalance {
+  id             String   @id @default(cuid())
+  skuId          String
+  regionalOffice String
+  quantity       Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  sku PeripheralSku @relation(fields: [skuId], references: [id], onDelete: Cascade)
+
+  @@unique([skuId, regionalOffice])
+  @@index([regionalOffice])
+  @@map("peripheral_balances")
+}
+
+model PeripheralMutation {
+  id        String             @id @default(cuid())
+  skuId     String
+  type      StockMutationType
+  quantity  Int
+  fromRo    String?
+  toRo      String?
+  notes     String?
+  mutatedAt DateTime           @default(now())
+  mutatedBy String?
+
+  sku PeripheralSku @relation(fields: [skuId], references: [id], onDelete: Cascade)
+
+  @@index([skuId, mutatedAt])
+  @@map("peripheral_mutations")
+}
+
+// ─── Integration API clients ─────────────────────────────────────────────────
+
+model IntegrationClient {
+  id         String   @id @default(cuid())
+  name       String
+  apiKey     String   @unique
+  scopes     String   @default("tickets:read,tickets:write")
+  externalSystem String @default("external")
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+
+  @@index([isActive])
+  @@map("integration_clients")
 }

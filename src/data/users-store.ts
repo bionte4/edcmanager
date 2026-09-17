@@ -1,119 +1,72 @@
 import type { AppRole } from "@/config/rbac.config";
 import { DEMO_PASSWORD } from "@/config/rbac.config";
 import type { AuthUser } from "@/lib/rbac";
+import { prisma } from "@/lib/prisma";
 
 export interface ManagedUser extends AuthUser {
   phone?: string;
-  /** Demo only — plaintext for mock store; Prisma uses passwordHash */
+  /** Demo: compared as plaintext against passwordHash column. */
   password: string;
   deletedAt?: string | null;
   createdAt: string;
 }
 
-const seed: ManagedUser[] = [
-  {
-    id: "u-admin-1",
-    name: "Admin Sistem",
-    email: "admin@edc.local",
-    phone: "0812-0000-0001",
-    role: "ADMIN",
-    isActive: true,
-    password: DEMO_PASSWORD,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "u-noc-1",
-    name: "Andi Pratama",
-    email: "andi.noc@edc.local",
-    phone: "0812-1111-0001",
-    role: "NOC",
-    isActive: true,
-    password: DEMO_PASSWORD,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "u-noc-2",
-    name: "Siti Rahma",
-    email: "siti.noc@edc.local",
-    phone: "0812-1111-0002",
-    role: "NOC",
-    isActive: true,
-    password: DEMO_PASSWORD,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "u-noc-3",
-    name: "Budi Santoso",
-    email: "budi.noc@edc.local",
-    phone: "0812-1111-0003",
-    role: "NOC",
-    isActive: true,
-    password: DEMO_PASSWORD,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "u-sup-1",
-    name: "Dewi Lestari",
-    email: "dewi.supervisor@edc.local",
-    phone: "0812-2222-0001",
-    role: "SUPERVISOR",
-    isActive: true,
-    password: DEMO_PASSWORD,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "u-ops-1",
-    name: "Rudi Hartono",
-    email: "rudi.ops@edc.local",
-    role: "OPS_MANAGER",
-    isActive: true,
-    password: DEMO_PASSWORD,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "u-gm-1",
-    name: "Hendra Wijaya",
-    email: "hendra.gm@edc.local",
-    phone: "0812-9999-0001",
-    role: "GM",
-    isActive: true,
-    password: DEMO_PASSWORD,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "u-tech-1",
-    name: "Eko Teknisi",
-    email: "eko.tech@edc.local",
-    role: "VENDOR_TECH",
-    isActive: true,
-    password: DEMO_PASSWORD,
-    createdAt: new Date().toISOString(),
-  },
-];
-
-/** In-memory user store for demo CRUD (replace with Prisma later). */
-let users: ManagedUser[] = seed.map((u) => ({ ...u }));
-
-export function listUsers(includeDeleted = false): ManagedUser[] {
-  return users
-    .filter((u) => includeDeleted || !u.deletedAt)
-    .map((u) => ({ ...u }));
+function mapUser(row: {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: AppRole | string;
+  passwordHash: string | null;
+  isActive: boolean;
+  deletedAt: Date | null;
+  createdAt: Date;
+}): ManagedUser {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone ?? undefined,
+    role: row.role as AppRole,
+    isActive: row.isActive,
+    password: row.passwordHash ?? DEMO_PASSWORD,
+    deletedAt: row.deletedAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+  };
 }
 
-export function findUserByEmail(email: string): ManagedUser | undefined {
+export async function listUsers(includeDeleted = false): Promise<ManagedUser[]> {
+  const rows = await prisma.user.findMany({
+    where: includeDeleted ? undefined : { deletedAt: null },
+    orderBy: { createdAt: "asc" },
+  });
+  return rows.map(mapUser);
+}
+
+export async function findUserByEmail(
+  email: string
+): Promise<ManagedUser | undefined> {
   const normalized = email.trim().toLowerCase();
-  return users.find((u) => u.email.toLowerCase() === normalized && !u.deletedAt);
+  const row = await prisma.user.findFirst({
+    where: { email: { equals: normalized, mode: "insensitive" }, deletedAt: null },
+  });
+  return row ? mapUser(row) : undefined;
 }
 
-export function findUserById(id: string): ManagedUser | undefined {
-  return users.find((u) => u.id === id && !u.deletedAt);
+export async function findUserById(
+  id: string
+): Promise<ManagedUser | undefined> {
+  const row = await prisma.user.findFirst({
+    where: { id, deletedAt: null },
+  });
+  return row ? mapUser(row) : undefined;
 }
 
-export function authenticateUser(
+export async function authenticateUser(
   email: string,
   password: string
-): AuthUser | null {
-  const user = findUserByEmail(email);
+): Promise<AuthUser | null> {
+  const user = await findUserByEmail(email);
   if (!user || !user.isActive) return null;
   if (user.password !== password) return null;
   return {
@@ -125,91 +78,95 @@ export function authenticateUser(
   };
 }
 
-export function createUser(input: {
+export async function createUser(input: {
   name: string;
   email: string;
   phone?: string;
   role: AppRole;
   password?: string;
   isActive?: boolean;
-}): ManagedUser {
+}): Promise<ManagedUser> {
   const email = input.email.trim().toLowerCase();
-  if (!input.name.trim()) throw new Error("Nama wajib diisi.");
-  if (!email.includes("@")) throw new Error("Email tidak valid.");
-  if (users.some((u) => u.email.toLowerCase() === email && !u.deletedAt)) {
-    throw new Error("Email sudah terpakai.");
+  const existing = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+  });
+  if (existing && !existing.deletedAt) {
+    throw new Error("Email sudah terdaftar.");
   }
-
-  const user: ManagedUser = {
-    id: `u-${Date.now()}`,
-    name: input.name.trim(),
-    email,
-    phone: input.phone?.trim() || undefined,
-    role: input.role,
-    isActive: input.isActive ?? true,
-    password: input.password?.trim() || DEMO_PASSWORD,
-    createdAt: new Date().toISOString(),
-  };
-  users = [user, ...users];
-  return { ...user };
+  const row = await prisma.user.create({
+    data: {
+      name: input.name.trim(),
+      email,
+      phone: input.phone?.trim() || null,
+      role: input.role,
+      passwordHash: input.password?.trim() || DEMO_PASSWORD,
+      isActive: input.isActive ?? true,
+    },
+  });
+  return mapUser(row);
 }
 
-export function updateUser(
+export async function updateUser(
   id: string,
-  patch: Partial<Pick<ManagedUser, "name" | "email" | "phone" | "role" | "isActive" | "password">>
-): ManagedUser {
-  const idx = users.findIndex((u) => u.id === id && !u.deletedAt);
-  if (idx < 0) throw new Error("User tidak ditemukan.");
+  input: Partial<{
+    name: string;
+    email: string;
+    phone: string;
+    role: AppRole;
+    password: string;
+    isActive: boolean;
+  }>
+): Promise<ManagedUser> {
+  const current = await prisma.user.findFirst({
+    where: { id, deletedAt: null },
+  });
+  if (!current) throw new Error("User tidak ditemukan.");
 
-  const current = users[idx]!;
-  const nextEmail = patch.email?.trim().toLowerCase();
-  if (nextEmail && nextEmail !== current.email) {
-    if (users.some((u) => u.email.toLowerCase() === nextEmail && !u.deletedAt)) {
-      throw new Error("Email sudah terpakai.");
-    }
+  if (input.email) {
+    const email = input.email.trim().toLowerCase();
+    const dup = await prisma.user.findFirst({
+      where: {
+        email: { equals: email, mode: "insensitive" },
+        NOT: { id },
+        deletedAt: null,
+      },
+    });
+    if (dup) throw new Error("Email sudah dipakai user lain.");
   }
 
-  const updated: ManagedUser = {
-    ...current,
-    ...patch,
-    name: patch.name?.trim() ?? current.name,
-    email: nextEmail ?? current.email,
-    phone: patch.phone !== undefined ? patch.phone.trim() || undefined : current.phone,
-    password: patch.password?.trim() || current.password,
-  };
-  users[idx] = updated;
-  return { ...updated };
+  const row = await prisma.user.update({
+    where: { id },
+    data: {
+      name: input.name?.trim(),
+      email: input.email?.trim().toLowerCase(),
+      phone: input.phone !== undefined ? input.phone.trim() || null : undefined,
+      role: input.role,
+      passwordHash: input.password?.trim() || undefined,
+      isActive: input.isActive,
+    },
+  });
+  return mapUser(row);
 }
 
-/** Soft delete */
-export function deleteUser(id: string): ManagedUser {
-  const idx = users.findIndex((u) => u.id === id && !u.deletedAt);
-  if (idx < 0) throw new Error("User tidak ditemukan.");
-  if (users[idx]!.role === "ADMIN") {
-    const otherAdmins = users.filter(
-      (u) => u.role === "ADMIN" && !u.deletedAt && u.id !== id && u.isActive
-    );
-    if (otherAdmins.length === 0) {
-      throw new Error("Tidak bisa menghapus ADMIN terakhir yang aktif.");
-    }
-  }
-  const updated = {
-    ...users[idx]!,
-    isActive: false,
-    deletedAt: new Date().toISOString(),
-  };
-  users[idx] = updated;
-  return { ...updated };
+export async function deleteUser(id: string): Promise<void> {
+  const current = await prisma.user.findFirst({
+    where: { id, deletedAt: null },
+  });
+  if (!current) throw new Error("User tidak ditemukan.");
+  await prisma.user.update({
+    where: { id },
+    data: { deletedAt: new Date(), isActive: false },
+  });
 }
 
-export function toPublicUser(user: ManagedUser): AuthUser & { phone?: string; createdAt: string } {
+export function toPublicUser(u: ManagedUser) {
   return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    phone: user.phone,
-    role: user.role,
-    isActive: user.isActive,
-    createdAt: user.createdAt,
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    phone: u.phone,
+    role: u.role,
+    isActive: u.isActive,
+    createdAt: u.createdAt,
   };
 }

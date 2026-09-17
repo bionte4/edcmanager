@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = authenticateUser(email, password);
+    const user = await authenticateUser(email, password);
     if (!user) {
       return NextResponse.json(
         { error: "Email atau password salah, atau akun nonaktif." },
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const attendance = recordLoginAttendance(user);
+    const attendance = await recordLoginAttendance(user);
 
     const token = await createSessionToken(user);
     const response = NextResponse.json({ user, attendance });

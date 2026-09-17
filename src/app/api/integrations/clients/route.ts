@@ -23,7 +23,7 @@ async function requireIntegrationAdmin(): Promise<AuthUser> {
   if (!token) throw new Error("Unauthorized");
   const session = await verifySessionToken(token);
   if (!session) throw new Error("Unauthorized");
-  const stored = findUserById(session.sub);
+  const stored = await findUserById(session.sub);
   if (!stored || !stored.isActive) throw new Error("Unauthorized");
   const user = sessionToAuthUser(session);
   assertCan(user, "admin:access");
@@ -40,7 +40,7 @@ function statusFor(e: unknown): number {
 export async function GET() {
   try {
     await requireIntegrationAdmin();
-    return NextResponse.json({ clients: listIntegrationClients(true) });
+    return NextResponse.json({ clients: await listIntegrationClients(true) });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Forbidden" },
@@ -67,11 +67,11 @@ export async function POST(request: Request) {
       if (!body.id) {
         return NextResponse.json({ error: "id wajib untuk rotate." }, { status: 400 });
       }
-      const client = rotateIntegrationClientKey(body.id);
+      const client = await rotateIntegrationClientKey(body.id);
       return NextResponse.json({ client });
     }
 
-    const client = createIntegrationClient({
+    const client = await createIntegrationClient({
       name: body.name ?? "",
       externalSystem: body.externalSystem ?? "",
       scopes: body.scopes,
@@ -103,7 +103,7 @@ export async function PATCH(request: Request) {
     if (!body.id) {
       return NextResponse.json({ error: "id wajib." }, { status: 400 });
     }
-    const client = updateIntegrationClient(body.id, {
+    const client = await updateIntegrationClient(body.id, {
       name: body.name,
       externalSystem: body.externalSystem,
       scopes: body.scopes,
@@ -130,8 +130,8 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "id wajib." }, { status: 400 });
     }
     const client = hard
-      ? hardDeleteIntegrationClient(id)
-      : deleteIntegrationClient(id);
+      ? await hardDeleteIntegrationClient(id)
+      : await deleteIntegrationClient(id);
     return NextResponse.json({ client });
   } catch (e) {
     return NextResponse.json(

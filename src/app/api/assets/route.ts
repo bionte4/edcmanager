@@ -24,7 +24,7 @@ async function requireUser(): Promise<AuthUser> {
   if (!token) throw new Error("Unauthorized");
   const session = await verifySessionToken(token);
   if (!session) throw new Error("Unauthorized");
-  const stored = findUserById(session.sub);
+  const stored = await findUserById(session.sub);
   if (!stored || !stored.isActive) throw new Error("Unauthorized");
   return sessionToAuthUser(session);
 }
@@ -44,14 +44,14 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (id) {
-      const asset = findAssetById(id);
+      const asset = await findAssetById(id);
       if (!asset) {
         return NextResponse.json({ error: "Asset tidak ditemukan." }, { status: 404 });
       }
       return NextResponse.json({ asset });
     }
 
-    let assets = listAssets();
+    let assets = await listAssets();
     const status = searchParams.get("status");
     const ro = searchParams.get("ro");
     const vendor = searchParams.get("vendor");
@@ -69,7 +69,7 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({ assets, kpis: assetKpis() });
+    return NextResponse.json({ assets, kpis: await assetKpis() });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Forbidden" },
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      const asset = mutateAsset({
+      const asset = await mutateAsset({
         id: body.id,
         mutationType: body.mutationType,
         toStatus: body.toStatus,
@@ -113,10 +113,10 @@ export async function POST(request: Request) {
         notes: body.notes ?? undefined,
         actorName: user.name,
       });
-      return NextResponse.json({ asset, kpis: assetKpis() });
+      return NextResponse.json({ asset, kpis: await assetKpis() });
     }
 
-    const asset = createAsset({
+    const asset = await createAsset({
       serialNumber: body.serialNumber ?? "",
       brand: body.brand ?? "",
       regionalOffice: body.regionalOffice ?? "",
@@ -126,7 +126,7 @@ export async function POST(request: Request) {
       notes: body.notes,
       actorName: user.name,
     });
-    return NextResponse.json({ asset, kpis: assetKpis() }, { status: 201 });
+    return NextResponse.json({ asset, kpis: await assetKpis() }, { status: 201 });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Gagal menyimpan" },
@@ -151,7 +151,7 @@ export async function PATCH(request: Request) {
     if (!body.id) {
       return NextResponse.json({ error: "id wajib." }, { status: 400 });
     }
-    const asset = updateAsset(body.id, {
+    const asset = await updateAsset(body.id, {
       serialNumber: body.serialNumber,
       brand: body.brand,
       regionalOffice: body.regionalOffice,
@@ -159,7 +159,7 @@ export async function PATCH(request: Request) {
       notes: body.notes,
       merchantId: body.merchantId,
     });
-    return NextResponse.json({ asset, kpis: assetKpis() });
+    return NextResponse.json({ asset, kpis: await assetKpis() });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Gagal update" },
@@ -177,8 +177,8 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ error: "id wajib." }, { status: 400 });
     }
-    const asset = deleteAsset(id);
-    return NextResponse.json({ asset, kpis: assetKpis() });
+    const asset = await deleteAsset(id);
+    return NextResponse.json({ asset, kpis: await assetKpis() });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Gagal hapus" },

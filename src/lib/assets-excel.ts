@@ -90,8 +90,11 @@ export function workbookToBuffer(workbook: XLSX.WorkBook): Buffer {
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
 
-export function buildAssetsExportBuffer(assets = listAssets()): Buffer {
-  return workbookToBuffer(buildAssetsWorkbook(assetsToRows(assets)));
+export async function buildAssetsExportBuffer(
+  assets?: EdcAsset[]
+): Promise<Buffer> {
+  const list = assets ?? (await listAssets());
+  return workbookToBuffer(buildAssetsWorkbook(assetsToRows(list)));
 }
 
 export function buildAssetsTemplateBuffer(): Buffer {
@@ -152,10 +155,10 @@ export interface ImportAssetsResult {
   totalRows: number;
 }
 
-export function importAssetRows(
+export async function importAssetRows(
   rows: AssetExcelRow[],
   options?: { actorName?: string }
-): ImportAssetsResult {
+): Promise<ImportAssetsResult> {
   const result: ImportAssetsResult = {
     created: 0,
     updated: 0,
@@ -175,10 +178,10 @@ export function importAssetRows(
 
       const status = normalizeStatus(row.status);
       const serial = row.serialNumber.trim().toUpperCase();
-      const existing = findAssetBySerial(serial);
+      const existing = await findAssetBySerial(serial);
 
       if (existing) {
-        updateAsset(existing.id, {
+        await updateAsset(existing.id, {
           serialNumber: serial,
           brand: row.brand,
           regionalOffice: row.regionalOffice,
@@ -195,7 +198,7 @@ export function importAssetRows(
         }
         result.updated += 1;
       } else {
-        createAsset({
+        await createAsset({
           serialNumber: serial,
           brand: row.brand,
           regionalOffice: row.regionalOffice,

@@ -6,11 +6,9 @@ import {
 } from "@/config/ola.config";
 import type { ItsmType, OperationalProcess } from "@/config/itsm.config";
 import type { TicketCategory, TicketLocation } from "@/config/sla.config";
+import { prisma } from "@/lib/prisma";
 import type { OlaPolicy } from "@/ola/types";
-
-function nowIso() {
-  return new Date().toISOString();
-}
+import type { OlaPolicy as PrismaOlaPolicy } from "@prisma/client";
 
 function fromSeed(seed: OlaPolicySeed): OlaPolicy {
   return {
@@ -25,16 +23,49 @@ function fromSeed(seed: OlaPolicySeed): OlaPolicy {
     process: seed.process ?? "*",
     isActive: seed.isActive ?? true,
     priority: seed.priority ?? 0,
-    updatedAt: nowIso(),
+    updatedAt: new Date().toISOString(),
   };
 }
 
-let policies: OlaPolicy[] = DEFAULT_OLA_POLICIES.map(fromSeed);
+function mapRow(row: PrismaOlaPolicy): OlaPolicy {
+  return {
+    id: row.id,
+    name: row.name,
+    stage: row.stage,
+    limitMinutes: row.limitMinutes,
+    warningThreshold: row.warningThreshold,
+    itsmType: row.itsmType as ItsmType | "*",
+    location: row.location as TicketLocation | "*",
+    category: row.category as TicketCategory | "*",
+    process: row.process as OperationalProcess | "*",
+    isActive: row.isActive,
+    priority: row.priority,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
 
 function clone(p: OlaPolicy): OlaPolicy {
   return { ...p };
 }
 
+/** In-memory cache; seeded with defaults until DB refresh completes. */
+let policies: OlaPolicy[] = DEFAULT_OLA_POLICIES.map(fromSeed);
+
+export async function refreshOlaCache(): Promise<void> {
+  try {
+    const rows = await prisma.olaPolicy.findMany({
+      orderBy: [{ priority: "desc" }, { name: "asc" }],
+    });
+    policies =
+      rows.length > 0 ? rows.map(mapRow) : DEFAULT_OLA_POLICIES.map(fromSeed);
+  } catch {
+    policies = DEFAULT_OLA_POLICIES.map(fromSeed);
+  }
+}
+
+void refreshOlaCache();
+
+/** Sync read from cache — reporting / ticketing call this synchronously. */
 export function listOlaPolicies(opts?: {
   stage?: OlaStage;
   activeOnly?: boolean;
@@ -78,31 +109,39 @@ function validateInput(input: OlaPolicyInput): void {
   }
 }
 
-export function createOlaPolicy(input: OlaPolicyInput): OlaPolicy {
+export async function createOlaPolicy(
+  input: OlaPolicyInput
+): Promise<OlaPolicy> {
   validateInput(input);
-  const row: OlaPolicy = {
-    id: `ola-${Date.now()}`,
-    name: input.name.trim(),
-    stage: input.stage,
-    limitMinutes: Math.round(input.limitMinutes),
-    warningThreshold: input.warningThreshold ?? OLA_WARNING_THRESHOLD,
-    itsmType: input.itsmType ?? "*",
-    location: input.location ?? "*",
-    category: input.category ?? "*",
-    process: input.process ?? "*",
-    isActive: input.isActive ?? true,
-    priority: input.priority ?? 50,
-    updatedAt: nowIso(),
-  };
-  policies = [row, ...policies];
-  return clone(row);
+  const row = await prisma.olaPolicy.create({
+    data: {
+      name: input.name.trim(),
+      stage: input.stage,
+      limitMinutes: Math.round(input.limitMinutes),
+      warningThreshold: input.warningThreshold ?? OLA_WARNING_THRESHOLD,
+      itsmType: input.itsmType ?? "*",
+      location: input.location ?? "*",
+      category: input.category ?? "*",
+      process: input.process ?? "*",
+      isActive: input.isActive ?? true,
+      priority: input.priority ?? 50,
+    },
+  });
+  await refreshOlaCache();
+  return mapRow(row);
 }
 
-export function updateOlaPolicy(id: string, input: Partial<OlaPolicyInput>): OlaPolicy {
-  const idx = policies.findIndex((p) => p.id === id);
-  if (idx < 0) throw new Error("Policy OLA tidak ditemukan.");
+export async function updateOlaPolicy(
+  id: string,
+  input: Partial<OlaPolicyInput>
+): Promise<OlaPolicy> {
+  const current =
+    policies.find((p) => p.id === id) ??
+    (await prisma.olaPolicy.findUnique({ where: { id } }).then((r) =>
+      r ? mapRow(r) : null
+    ));
+  if (!current) throw new Error("Policy OLA tidak ditemukan.");
 
-  const current = policies[idx];
   const nextInput: OlaPolicyInput = {
     name: input.name ?? current.name,
     stage: input.stage ?? current.stage,
@@ -117,31 +156,53 @@ export function updateOlaPolicy(id: string, input: Partial<OlaPolicyInput>): Ola
   };
   validateInput(nextInput);
 
-  const updated: OlaPolicy = {
-    ...current,
-    name: nextInput.name.trim(),
-    stage: nextInput.stage,
-    limitMinutes: Math.round(nextInput.limitMinutes),
-    warningThreshold: nextInput.warningThreshold ?? OLA_WARNING_THRESHOLD,
-    itsmType: nextInput.itsmType ?? "*",
-    location: nextInput.location ?? "*",
-    category: nextInput.category ?? "*",
-    process: nextInput.process ?? "*",
-    isActive: nextInput.isActive ?? true,
-    priority: nextInput.priority ?? 50,
-    updatedAt: nowIso(),
-  };
-  policies[idx] = updated;
-  return clone(updated);
+  const row = await prisma.olaPolicy.update({
+    where: { id },
+    data: {
+      name: nextInput.name.trim(),
+      stage: nextInput.stage,
+      limitMinutes: Math.round(nextInput.limitMinutes),
+      warningThreshold: nextInput.warningThreshold ?? OLA_WARNING_THRESHOLD,
+      itsmType: nextInput.itsmType ?? "*",
+      location: nextInput.location ?? "*",
+      category: nextInput.category ?? "*",
+      process: nextInput.process ?? "*",
+      isActive: nextInput.isActive ?? true,
+      priority: nextInput.priority ?? 50,
+    },
+  });
+  await refreshOlaCache();
+  return mapRow(row);
 }
 
-export function deleteOlaPolicy(id: string): void {
-  const before = policies.length;
-  policies = policies.filter((p) => p.id !== id);
-  if (policies.length === before) throw new Error("Policy OLA tidak ditemukan.");
+export async function deleteOlaPolicy(id: string): Promise<void> {
+  const existing =
+    policies.find((p) => p.id === id) ??
+    (await prisma.olaPolicy.findUnique({ where: { id } }));
+  if (!existing) throw new Error("Policy OLA tidak ditemukan.");
+  await prisma.olaPolicy.delete({ where: { id } });
+  await refreshOlaCache();
 }
 
-export function resetOlaPolicies(): OlaPolicy[] {
-  policies = DEFAULT_OLA_POLICIES.map(fromSeed);
+export async function resetOlaPolicies(): Promise<OlaPolicy[]> {
+  await prisma.$transaction(async (tx) => {
+    await tx.olaPolicy.deleteMany();
+    await tx.olaPolicy.createMany({
+      data: DEFAULT_OLA_POLICIES.map((seed) => ({
+        id: seed.id,
+        name: seed.name,
+        stage: seed.stage,
+        limitMinutes: seed.limitMinutes,
+        warningThreshold: seed.warningThreshold ?? OLA_WARNING_THRESHOLD,
+        itsmType: seed.itsmType ?? "*",
+        location: seed.location ?? "*",
+        category: seed.category ?? "*",
+        process: seed.process ?? "*",
+        isActive: seed.isActive ?? true,
+        priority: seed.priority ?? 0,
+      })),
+    });
+  });
+  await refreshOlaCache();
   return listOlaPolicies();
 }

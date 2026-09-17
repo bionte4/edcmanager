@@ -1,9 +1,8 @@
 import {
   DEMO_AS_OF,
-  MOCK_BUFFER_STOCK,
   type BufferStockRow,
 } from "@/data/dashboard";
-import { MOCK_VENDOR_METRICS, type VendorMonthlyMetrics } from "@/data/vendors";
+import { loadVendorMetrics, type VendorMonthlyMetrics } from "@/data/vendors";
 import { buildOpsReport } from "@/data/reporting";
 import { assetKpis } from "@/data/assets-store";
 import {
@@ -101,12 +100,12 @@ function buildTrend(vendors: VendorMonthlyMetrics[]): MonthlyTrendPoint[] {
   });
 }
 
-export function buildExecutiveSummary(
+export async function buildExecutiveSummary(
   asOf: Date = DEMO_AS_OF
-): ExecutiveSummary {
-  const { summary } = buildOpsReport(asOf);
-  const vendors = MOCK_VENDOR_METRICS;
-  const bufferRows = MOCK_BUFFER_STOCK;
+): Promise<ExecutiveSummary> {
+  const { summary } = await buildOpsReport(asOf);
+  const vendors = await loadVendorMetrics();
+  const bufferRows = summary.buffer.rows;
   const roBelow = bufferRows.filter((r) => r.belowThreshold).length;
   const belowPercent =
     bufferRows.length > 0 ? (roBelow / bufferRows.length) * 100 : 0;
@@ -125,7 +124,7 @@ export function buildExecutiveSummary(
     );
   const breached = vendors.reduce((s, v) => s + v.breachedTickets, 0);
 
-  const edc = assetKpis();
+  const edc = await assetKpis();
   const deployedFromAssets = edc.deployed;
   const deployedFromVendors = vendors.reduce((s, v) => s + v.deployedUnits, 0);
   const deployedUnits = Math.max(deployedFromAssets, deployedFromVendors);

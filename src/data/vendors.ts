@@ -1,22 +1,22 @@
 import { UPTIME_TARGET_PERCENT } from "@/config/sla.config";
+import { prisma } from "@/lib/prisma";
 
 export interface VendorMonthlyMetrics {
   vendorId: string;
   vendorName: string;
   type: "DISTRIBUTOR" | "FMS";
   monthLabel: string;
-  /** Tickets closed within SLA / total closed */
   slaComplianceRate: number;
   avgResolutionHours: number;
   totalTickets: number;
   breachedTickets: number;
-  /** Operational incidents (spare part delay, tech no-show, etc.) */
   operationalIssues: number;
   uptimePercent: number;
   allocationQuota: number;
   deployedUnits: number;
 }
 
+/** Fallback if DB empty — mirrors seed.mjs metric targets. */
 export const MOCK_VENDOR_METRICS: VendorMonthlyMetrics[] = [
   {
     vendorId: "v1",
@@ -48,6 +48,53 @@ export const MOCK_VENDOR_METRICS: VendorMonthlyMetrics[] = [
   },
 ];
 
+export async function loadVendorMetrics(): Promise<VendorMonthlyMetrics[]> {
+  try {
+    const vendors = await prisma.vendor.findMany({
+      where: { isActive: true },
+      include: {
+        metricLogs: { orderBy: { date: "desc" }, take: 1 },
+        edcUnits: { where: { status: "DEPLOYED" }, select: { id: true } },
+      },
+    });
+    if (vendors.length === 0) return MOCK_VENDOR_METRICS;
+
+    return vendors.map((v) => {
+      const log = v.metricLogs[0];
+      const total = log?.totalTickets ?? 0;
+      const breached = log?.breachedTickets ?? 0;
+      const resolved = log?.resolvedTickets ?? 0;
+      const slaComplianceRate =
+        resolved + breached > 0
+          ? (resolved / (resolved + breached)) * 100
+          : 100;
+      const monthLabel = log
+        ? new Intl.DateTimeFormat("id-ID", {
+            month: "short",
+            year: "numeric",
+            timeZone: "UTC",
+          }).format(log.date)
+        : "—";
+      return {
+        vendorId: v.id,
+        vendorName: v.name,
+        type: v.type as "DISTRIBUTOR" | "FMS",
+        monthLabel,
+        slaComplianceRate,
+        avgResolutionHours: 2.5,
+        totalTickets: total,
+        breachedTickets: breached,
+        operationalIssues: 0,
+        uptimePercent: log ? Number(log.uptimePercent) : UPTIME_TARGET_PERCENT,
+        allocationQuota: v.allocationQuota,
+        deployedUnits: v.edcUnits.length,
+      };
+    });
+  } catch {
+    return MOCK_VENDOR_METRICS;
+  }
+}
+
 export interface VendorComparisonRow {
   metric: string;
   vendor1: string;
@@ -58,8 +105,8 @@ export interface VendorComparisonRow {
 export function buildVendorComparison(
   vendors: VendorMonthlyMetrics[] = MOCK_VENDOR_METRICS
 ): VendorComparisonRow[] {
-  const v1 = vendors.find((v) => v.vendorId === "v1");
-  const v2 = vendors.find((v) => v.vendorId === "v2");
+  const v1 = vendors.find((v) => v.vendorId === "v1") ?? vendors[0];
+  const v2 = vendors.find((v) => v.vendorId === "v2") ?? vendors[1];
   if (!v1 || !v2) return [];
 
   const pick = (
@@ -83,13 +130,9 @@ export function buildVendorComparison(
   };
 
   return [
-    pick("SLA Compliance Rate", v1.slaComplianceRate, v2.slaComplianceRate, (n) => `${n.toFixed(1)}%`, true),
-    pick("Avg Resolution Time", v1.avgResolutionHours, v2.avgResolutionHours, (n) => `${n.toFixed(1)} jam`, false),
-    pick("Operational Issues", v1.operationalIssues, v2.operationalIssues, (n) => `${n}`, false),
-    pick("Tickets Breached", v1.breachedTickets, v2.breachedTickets, (n) => `${n}`, false),
+    pick("SLA compliance", v1.slaComplianceRate, v2.slaComplianceRate, (n) => `${n.toFixed(1)}%`, true),
     pick("Uptime", v1.uptimePercent, v2.uptimePercent, (n) => `${n.toFixed(2)}%`, true),
-    pick("Deployed Units", v1.deployedUnits, v2.deployedUnits, (n) => `${n}`, true),
+    pick("Breached tickets", v1.breachedTickets, v2.breachedTickets, (n) => String(n), false),
+    pick("Deployed units", v1.deployedUnits, v2.deployedUnits, (n) => String(n), true),
   ];
 }
-
-export { UPTIME_TARGET_PERCENT };

@@ -23,7 +23,7 @@ async function requireUser(): Promise<AuthUser> {
   if (!token) throw new Error("Unauthorized");
   const session = await verifySessionToken(token);
   if (!session) throw new Error("Unauthorized");
-  const stored = findUserById(session.sub);
+  const stored = await findUserById(session.sub);
   if (!stored || !stored.isActive) throw new Error("Unauthorized");
   return sessionToAuthUser(session);
 }
@@ -62,10 +62,10 @@ export async function POST(request: Request) {
     };
 
     if (body.action === "reset") {
-      return NextResponse.json({ policies: resetOlaPolicies() });
+      return NextResponse.json({ policies: await resetOlaPolicies() });
     }
 
-    const policy = createOlaPolicy(body);
+    const policy = await createOlaPolicy(body);
     return NextResponse.json({ policy }, { status: 201 });
   } catch (e) {
     return NextResponse.json(
@@ -82,7 +82,7 @@ export async function PATCH(request: Request) {
     const body = (await request.json()) as Partial<OlaPolicyInput> & { id?: string };
     if (!body.id) throw new Error("id wajib diisi.");
     const { id, ...rest } = body;
-    const policy = updateOlaPolicy(id, rest);
+    const policy = await updateOlaPolicy(id, rest);
     return NextResponse.json({ policy });
   } catch (e) {
     return NextResponse.json(
@@ -99,7 +99,7 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (!id) throw new Error("id wajib diisi.");
-    deleteOlaPolicy(id);
+    await deleteOlaPolicy(id);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json(

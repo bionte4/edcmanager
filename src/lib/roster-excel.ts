@@ -89,8 +89,10 @@ function normalizeDate(raw: string): string {
   throw new Error(`shiftDate tidak valid: "${raw}" (pakai YYYY-MM-DD)`);
 }
 
-export function shiftsToRosterRows(rows: NocShiftRow[]): RosterExcelRow[] {
-  const users = listUsers();
+export async function shiftsToRosterRows(
+  rows: NocShiftRow[]
+): Promise<RosterExcelRow[]> {
+  const users = await listUsers();
   const emailById = new Map(users.map((u) => [u.id, u.email]));
   return rows.map((s) => ({
     shiftDate: s.shiftDate,
@@ -124,19 +126,22 @@ export function workbookToBuffer(workbook: XLSX.WorkBook): Buffer {
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
 
-export function buildRosterExportBuffer(from: string, to: string): Buffer {
-  const rows = shiftsToRosterRows(listWfmShifts({ from, to }));
+export async function buildRosterExportBuffer(
+  from: string,
+  to: string
+): Promise<Buffer> {
+  const rows = await shiftsToRosterRows(await listWfmShifts({ from, to }));
   return workbookToBuffer(buildRosterWorkbook(rows, "Roster"));
 }
 
-export function buildRosterTemplateBuffer(opts: {
+export async function buildRosterTemplateBuffer(opts: {
   mode: RosterPeriodMode;
   anchor?: string;
   from?: string;
   to?: string;
-}): Buffer {
+}): Promise<Buffer> {
   const period = resolveRosterPeriod(opts);
-  const sampleUsers = listUsers().filter(
+  const sampleUsers = (await listUsers()).filter(
     (u) => u.role === "NOC" || u.role === "SUPERVISOR"
   );
   const dates = enumerateDates(period.from, period.to).slice(0, 7);
@@ -223,10 +228,10 @@ export interface RosterImportResult {
   to: string;
 }
 
-export function importRosterRows(
+export async function importRosterRows(
   rows: RosterExcelRow[],
   opts?: { mode?: "merge" | "replace" }
-): RosterImportResult {
+): Promise<RosterImportResult> {
   if (rows.length === 0) throw new Error("Tidak ada baris untuk diimpor.");
 
   const dates = rows.map((r) => r.shiftDate).sort();
@@ -234,17 +239,18 @@ export function importRosterRows(
   const to = dates[dates.length - 1]!;
   let cleared = 0;
   if (opts?.mode === "replace") {
-    cleared = clearShiftsInRange(from, to);
+    cleared = await clearShiftsInRange(from, to);
   }
 
   let created = 0;
   let updated = 0;
   const errors: string[] = [];
 
-  rows.forEach((row, i) => {
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i]!;
     const line = i + 2;
     try {
-      const user = findUserByEmail(row.email);
+      const user = await findUserByEmail(row.email);
       if (!user) {
         throw new Error(`User tidak ditemukan untuk email "${row.email}"`);
       }
@@ -255,12 +261,12 @@ export function importRosterRows(
       }
       const shiftType = normalizeShiftType(row.shiftType);
       const status = normalizeStatus(row.status);
-      const existing = listWfmShifts({
+      const existing = await listWfmShifts({
         date: row.shiftDate,
         userId: user.id,
         shiftType,
       });
-      upsertShiftRow({
+      await upsertShiftRow({
         userId: user.id,
         userName: user.name,
         role: user.role as AppRole & NocShiftRow["role"],
@@ -274,7 +280,7 @@ export function importRosterRows(
     } catch (e) {
       errors.push(`Baris ${line}: ${e instanceof Error ? e.message : "Error"}`);
     }
-  });
+  }
 
   if (created + updated === 0 && errors.length > 0) {
     throw new Error(errors.slice(0, 5).join(" · "));

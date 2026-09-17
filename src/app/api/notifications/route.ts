@@ -27,7 +27,7 @@ export async function GET() {
     await requireSession();
     return NextResponse.json({
       smtpConfigured: isSmtpConfigured(),
-      notifications: listNotifications(50),
+      notifications: await listNotifications(50),
     });
   } catch (e) {
     const err = e as { message?: string; status?: number };

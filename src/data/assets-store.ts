@@ -5,6 +5,13 @@ import {
   type EdcMutationType,
   type EdcUnitStatus,
 } from "@/config/assets.config";
+import { prisma } from "@/lib/prisma";
+import type {
+  EdcMutationHistory,
+  EdcUnit,
+  MutationType,
+  Vendor,
+} from "@prisma/client";
 
 export interface AssetMutation {
   id: string;
@@ -33,9 +40,15 @@ export interface EdcAsset {
   mutations: AssetMutation[];
 }
 
-function nowIso() {
-  return new Date().toISOString();
-}
+type UnitWithRelations = EdcUnit & {
+  vendor: Vendor;
+  mutationHistory: EdcMutationHistory[];
+};
+
+const unitInclude = {
+  vendor: true,
+  mutationHistory: { orderBy: { mutatedAt: "desc" as const } },
+};
 
 function assertStatus(value: string): EdcUnitStatus {
   if (!(EDC_UNIT_STATUSES as readonly string[]).includes(value)) {
@@ -51,147 +64,114 @@ function assertMutation(value: string): EdcMutationType {
   return value as EdcMutationType;
 }
 
-const seed: EdcAsset[] = [
-  {
-    id: "asset-1",
-    serialNumber: "ING-JKT-10021",
-    brand: "Ingenico",
-    regionalOffice: "RO Jakarta 1",
-    status: "BUFFER",
-    merchantId: null,
-    vendorName: "Vendor 1",
-    notes: "Cadangan VIP peak",
-    createdAt: "2026-01-10T02:00:00.000Z",
-    updatedAt: "2026-01-10T02:00:00.000Z",
-    mutations: [],
-  },
-  {
-    id: "asset-2",
-    serialNumber: "VRF-JKT-10088",
-    brand: "Verifone",
-    regionalOffice: "RO Jakarta 1",
-    status: "DEPLOYED",
-    merchantId: "MID-102938",
-    vendorName: "Vendor 1",
-    createdAt: "2026-01-12T02:00:00.000Z",
-    updatedAt: "2026-08-01T04:00:00.000Z",
-    mutations: [],
-  },
-  {
-    id: "asset-3",
-    serialNumber: "PAX-BDG-20011",
-    brand: "PAX",
-    regionalOffice: "RO Bandung",
-    status: "IDLE",
-    merchantId: null,
-    vendorName: "Vendor 2",
-    notes: "Idle — kandidat pooling",
-    createdAt: "2026-02-01T02:00:00.000Z",
-    updatedAt: "2026-07-15T06:00:00.000Z",
-    mutations: [],
-  },
-  {
-    id: "asset-4",
-    serialNumber: "ING-BDG-20044",
-    brand: "Ingenico",
-    regionalOffice: "RO Bandung",
-    status: "BUFFER",
-    merchantId: null,
-    vendorName: "Vendor 2",
-    createdAt: "2026-02-10T02:00:00.000Z",
-    updatedAt: "2026-02-10T02:00:00.000Z",
-    mutations: [],
-  },
-  {
-    id: "asset-5",
-    serialNumber: "CST-SBY-30001",
-    brand: "Castles",
-    regionalOffice: "RO Surabaya",
-    status: "DEPLOYED",
-    merchantId: "MID-778899",
-    vendorName: "Vendor 1",
-    createdAt: "2026-03-01T02:00:00.000Z",
-    updatedAt: "2026-09-01T03:00:00.000Z",
-    mutations: [],
-  },
-  {
-    id: "asset-6",
-    serialNumber: "PAX-SBY-30077",
-    brand: "PAX",
-    regionalOffice: "RO Surabaya",
-    status: "BUFFER",
-    merchantId: null,
-    vendorName: "Vendor 1",
-    createdAt: "2026-03-05T02:00:00.000Z",
-    updatedAt: "2026-03-05T02:00:00.000Z",
-    mutations: [],
-  },
-  {
-    id: "asset-7",
-    serialNumber: "VRF-DPS-40012",
-    brand: "Verifone",
-    regionalOffice: "RO Denpasar",
-    status: "DEPLOYED",
-    merchantId: "MID-441200",
-    vendorName: "Vendor 2",
-    createdAt: "2026-04-01T02:00:00.000Z",
-    updatedAt: "2026-08-20T05:00:00.000Z",
-    mutations: [],
-  },
-  {
-    id: "asset-8",
-    serialNumber: "ING-DPS-40055",
-    brand: "Ingenico",
-    regionalOffice: "RO Denpasar",
-    status: "IDLE",
-    merchantId: null,
-    vendorName: "Vendor 2",
-    notes: "Menunggu recall ke buffer",
-    createdAt: "2026-04-12T02:00:00.000Z",
-    updatedAt: "2026-09-10T01:00:00.000Z",
-    mutations: [],
-  },
-];
-
-let assets: EdcAsset[] = seed.map((a) => ({
-  ...a,
-  mutations: [...a.mutations],
-}));
-
-function clone(asset: EdcAsset): EdcAsset {
+function mapMutation(row: EdcMutationHistory): AssetMutation {
   return {
-    ...asset,
-    mutations: asset.mutations.map((m) => ({ ...m })),
+    id: row.id,
+    assetId: row.edcUnitId,
+    mutationType: row.mutationType as EdcMutationType,
+    fromStatus: (row.fromStatus as EdcUnitStatus | null) ?? null,
+    toStatus: (row.toStatus as EdcUnitStatus | null) ?? null,
+    fromRegionalOffice: row.fromRegionalOffice,
+    toRegionalOffice: row.toRegionalOffice,
+    notes: row.notes,
+    mutatedAt: row.mutatedAt.toISOString(),
+    mutatedBy: row.mutatedBy,
   };
 }
 
-export function listAssets(): EdcAsset[] {
-  return assets.map(clone);
+/** EdcUnit has no notes column — surface registration notes from mutation history when present. */
+function extractNotes(mutations: AssetMutation[]): string | null {
+  const registered = mutations.find(
+    (m) =>
+      m.mutationType === "STATUS_CHANGE" &&
+      m.notes &&
+      m.notes !== "Asset registered"
+  );
+  if (registered?.notes) {
+    const prefix = "Asset registered — ";
+    if (registered.notes.startsWith(prefix)) {
+      return registered.notes.slice(prefix.length) || null;
+    }
+    if (registered.notes !== "Asset registered") return registered.notes;
+  }
+  return null;
 }
 
-export function findAssetById(id: string): EdcAsset | undefined {
-  const found = assets.find((a) => a.id === id);
-  return found ? clone(found) : undefined;
-}
-
-export function findAssetBySerial(serialNumber: string): EdcAsset | undefined {
-  const sn = serialNumber.trim().toUpperCase();
-  const found = assets.find((a) => a.serialNumber === sn);
-  return found ? clone(found) : undefined;
-}
-
-export function assetKpis() {
-  const all = assets;
+function mapAsset(row: UnitWithRelations): EdcAsset {
+  const mutations = row.mutationHistory.map(mapMutation);
   return {
-    total: all.length,
-    buffer: all.filter((a) => a.status === "BUFFER").length,
-    deployed: all.filter((a) => a.status === "DEPLOYED").length,
-    idle: all.filter((a) => a.status === "IDLE").length,
+    id: row.id,
+    serialNumber: row.serialNumber,
+    brand: row.brand,
+    regionalOffice: row.regionalOffice,
+    status: row.status as EdcUnitStatus,
+    merchantId: row.merchantId,
+    vendorName: row.vendor.name,
+    notes: extractNotes(mutations),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    mutations,
+  };
+}
+
+async function resolveVendorId(vendorName: string): Promise<string> {
+  const name = vendorName.trim();
+  if (!name) throw new Error("Vendor wajib.");
+  const vendor = await prisma.vendor.findFirst({
+    where: { name: { equals: name, mode: "insensitive" }, isActive: true },
+  });
+  if (!vendor) throw new Error(`Vendor tidak ditemukan: ${name}`);
+  return vendor.id;
+}
+
+async function loadUnit(id: string): Promise<UnitWithRelations | null> {
+  return prisma.edcUnit.findUnique({
+    where: { id },
+    include: unitInclude,
+  });
+}
+
+export async function listAssets(): Promise<EdcAsset[]> {
+  const rows = await prisma.edcUnit.findMany({
+    include: unitInclude,
+    orderBy: { updatedAt: "desc" },
+  });
+  return rows.map(mapAsset);
+}
+
+export async function findAssetById(id: string): Promise<EdcAsset | undefined> {
+  const row = await loadUnit(id);
+  return row ? mapAsset(row) : undefined;
+}
+
+export async function findAssetBySerial(
+  serialNumber: string
+): Promise<EdcAsset | undefined> {
+  const sn = serialNumber.trim().toUpperCase();
+  const row = await prisma.edcUnit.findUnique({
+    where: { serialNumber: sn },
+    include: unitInclude,
+  });
+  return row ? mapAsset(row) : undefined;
+}
+
+export async function assetKpis() {
+  const [total, buffer, deployed, idle] = await Promise.all([
+    prisma.edcUnit.count(),
+    prisma.edcUnit.count({ where: { status: "BUFFER" } }),
+    prisma.edcUnit.count({ where: { status: "DEPLOYED" } }),
+    prisma.edcUnit.count({ where: { status: "IDLE" } }),
+  ]);
+  return {
+    total,
+    buffer,
+    deployed,
+    idle,
     regionalOffices: REGIONAL_OFFICES.length,
   };
 }
 
-export function createAsset(input: {
+export async function createAsset(input: {
   serialNumber: string;
   brand: string;
   regionalOffice: string;
@@ -200,57 +180,59 @@ export function createAsset(input: {
   vendorName: string;
   notes?: string | null;
   actorName?: string;
-}): EdcAsset {
+}): Promise<EdcAsset> {
   const serialNumber = input.serialNumber.trim().toUpperCase();
   const brand = input.brand.trim();
   const regionalOffice = input.regionalOffice.trim();
   const vendorName = input.vendorName.trim();
   const status = input.status ? assertStatus(input.status) : "BUFFER";
+  const notes = input.notes?.trim() || null;
 
   if (!serialNumber) throw new Error("Serial number wajib.");
   if (!brand) throw new Error("Merek wajib.");
   if (!regionalOffice) throw new Error("Regional Office wajib.");
   if (!vendorName) throw new Error("Vendor wajib.");
-  if (assets.some((a) => a.serialNumber === serialNumber)) {
-    throw new Error("Serial number sudah terdaftar.");
-  }
   if (status === "DEPLOYED" && !input.merchantId?.trim()) {
     throw new Error("Merchant ID wajib untuk status Deployed.");
   }
 
-  const stamp = nowIso();
-  const asset: EdcAsset = {
-    id: `asset-${Date.now()}`,
-    serialNumber,
-    brand,
-    regionalOffice,
-    status,
-    merchantId: status === "DEPLOYED" ? input.merchantId?.trim() || null : null,
-    vendorName,
-    notes: input.notes?.trim() || null,
-    createdAt: stamp,
-    updatedAt: stamp,
-    mutations: [
-      {
-        id: `mut-${Date.now()}`,
-        assetId: "",
-        mutationType: "STATUS_CHANGE",
-        fromStatus: null,
-        toStatus: status,
-        fromRegionalOffice: null,
-        toRegionalOffice: regionalOffice,
-        notes: "Asset registered",
-        mutatedAt: stamp,
-        mutatedBy: input.actorName ?? "system",
+  const existing = await prisma.edcUnit.findUnique({
+    where: { serialNumber },
+  });
+  if (existing) throw new Error("Serial number sudah terdaftar.");
+
+  const vendorId = await resolveVendorId(vendorName);
+  const mutationNotes = notes
+    ? `Asset registered — ${notes}`
+    : "Asset registered";
+
+  const row = await prisma.edcUnit.create({
+    data: {
+      serialNumber,
+      brand,
+      regionalOffice,
+      status,
+      merchantId: status === "DEPLOYED" ? input.merchantId?.trim() || null : null,
+      vendorId,
+      mutationHistory: {
+        create: {
+          mutationType: "STATUS_CHANGE" satisfies MutationType,
+          fromStatus: null,
+          toStatus: status,
+          fromRegionalOffice: null,
+          toRegionalOffice: regionalOffice,
+          notes: mutationNotes,
+          mutatedBy: input.actorName ?? "system",
+        },
       },
-    ],
-  };
-  asset.mutations[0]!.assetId = asset.id;
-  assets = [asset, ...assets];
-  return clone(asset);
+    },
+    include: unitInclude,
+  });
+
+  return mapAsset(row);
 }
 
-export function updateAsset(
+export async function updateAsset(
   id: string,
   patch: Partial<{
     serialNumber: string;
@@ -260,47 +242,92 @@ export function updateAsset(
     notes: string | null;
     merchantId: string | null;
   }>
-): EdcAsset {
-  const idx = assets.findIndex((a) => a.id === id);
-  if (idx < 0) throw new Error("Asset tidak ditemukan.");
-  const current = assets[idx]!;
+): Promise<EdcAsset> {
+  const current = await loadUnit(id);
+  if (!current) throw new Error("Asset tidak ditemukan.");
 
-  const nextSerial = patch.serialNumber?.trim().toUpperCase() ?? current.serialNumber;
-  if (assets.some((a) => a.id !== id && a.serialNumber === nextSerial)) {
-    throw new Error("Serial number sudah terdaftar.");
+  const nextSerial =
+    patch.serialNumber?.trim().toUpperCase() ?? current.serialNumber;
+  if (nextSerial !== current.serialNumber) {
+    const clash = await prisma.edcUnit.findUnique({
+      where: { serialNumber: nextSerial },
+    });
+    if (clash) throw new Error("Serial number sudah terdaftar.");
   }
 
-  const updated: EdcAsset = {
-    ...current,
-    serialNumber: nextSerial,
-    brand: patch.brand?.trim() ?? current.brand,
-    regionalOffice: patch.regionalOffice?.trim() ?? current.regionalOffice,
-    vendorName: patch.vendorName?.trim() ?? current.vendorName,
-    notes:
-      patch.notes !== undefined ? patch.notes?.trim() || null : current.notes,
-    merchantId:
-      patch.merchantId !== undefined
-        ? patch.merchantId?.trim() || null
-        : current.merchantId,
-    updatedAt: nowIso(),
-  };
+  const brand = patch.brand?.trim() ?? current.brand;
+  const regionalOffice =
+    patch.regionalOffice?.trim() ?? current.regionalOffice;
+  const vendorName = patch.vendorName?.trim() ?? current.vendor.name;
+  if (!brand) throw new Error("Merek wajib.");
+  if (!regionalOffice) throw new Error("Regional Office wajib.");
+  if (!vendorName) throw new Error("Vendor wajib.");
 
-  if (!updated.brand) throw new Error("Merek wajib.");
-  if (!updated.regionalOffice) throw new Error("Regional Office wajib.");
-  if (!updated.vendorName) throw new Error("Vendor wajib.");
+  const vendorId =
+    vendorName.toLowerCase() === current.vendor.name.toLowerCase()
+      ? current.vendorId
+      : await resolveVendorId(vendorName);
 
-  assets[idx] = updated;
-  return clone(updated);
+  const merchantId =
+    patch.merchantId !== undefined
+      ? patch.merchantId?.trim() || null
+      : current.merchantId;
+
+  // Persist free-text notes via a STATUS_CHANGE history entry when notes change.
+  const nextNotes =
+    patch.notes !== undefined ? patch.notes?.trim() || null : undefined;
+  const currentNotes = extractNotes(current.mutationHistory.map(mapMutation));
+  const notesChanged =
+    nextNotes !== undefined && nextNotes !== (currentNotes ?? null);
+
+  const row = await prisma.edcUnit.update({
+    where: { id },
+    data: {
+      serialNumber: nextSerial,
+      brand,
+      regionalOffice,
+      vendorId,
+      merchantId,
+      ...(notesChanged
+        ? {
+            mutationHistory: {
+              create: {
+                mutationType: "STATUS_CHANGE" as MutationType,
+                fromStatus: current.status,
+                toStatus: current.status,
+                fromRegionalOffice: current.regionalOffice,
+                toRegionalOffice: regionalOffice,
+                notes: nextNotes
+                  ? `Asset registered — ${nextNotes}`
+                  : "Asset registered",
+                mutatedBy: "system",
+              },
+            },
+          }
+        : {}),
+    },
+    include: unitInclude,
+  });
+
+  return mapAsset(row);
 }
 
-export function deleteAsset(id: string): EdcAsset {
-  const idx = assets.findIndex((a) => a.id === id);
-  if (idx < 0) throw new Error("Asset tidak ditemukan.");
-  const [removed] = assets.splice(idx, 1);
-  return clone(removed!);
+export async function deleteAsset(id: string): Promise<EdcAsset> {
+  const current = await loadUnit(id);
+  if (!current) throw new Error("Asset tidak ditemukan.");
+
+  const linkedTickets = await prisma.ticket.count({
+    where: { edcUnitId: id },
+  });
+  if (linkedTickets > 0) {
+    throw new Error("Asset tidak bisa dihapus karena masih terhubung ke ticket.");
+  }
+
+  await prisma.edcUnit.delete({ where: { id } });
+  return mapAsset(current);
 }
 
-export function mutateAsset(input: {
+export async function mutateAsset(input: {
   id: string;
   mutationType: EdcMutationType | string;
   toStatus?: EdcUnitStatus | string;
@@ -308,15 +335,14 @@ export function mutateAsset(input: {
   merchantId?: string | null;
   notes?: string;
   actorName?: string;
-}): EdcAsset {
-  const idx = assets.findIndex((a) => a.id === input.id);
-  if (idx < 0) throw new Error("Asset tidak ditemukan.");
+}): Promise<EdcAsset> {
+  const current = await loadUnit(input.id);
+  if (!current) throw new Error("Asset tidak ditemukan.");
 
-  const current = assets[idx]!;
   const mutationType = assertMutation(input.mutationType);
-  const fromStatus = current.status;
+  const fromStatus = current.status as EdcUnitStatus;
   const fromRo = current.regionalOffice;
-  let toStatus = current.status;
+  let toStatus = current.status as EdcUnitStatus;
   let toRo = current.regionalOffice;
   let merchantId = current.merchantId ?? null;
 
@@ -370,28 +396,26 @@ export function mutateAsset(input: {
       throw new Error("Tipe mutasi tidak dikenali.");
   }
 
-  const stamp = nowIso();
-  const mutation: AssetMutation = {
-    id: `mut-${Date.now()}`,
-    assetId: current.id,
-    mutationType,
-    fromStatus,
-    toStatus,
-    fromRegionalOffice: fromRo,
-    toRegionalOffice: toRo,
-    notes: input.notes?.trim() || null,
-    mutatedAt: stamp,
-    mutatedBy: input.actorName ?? "system",
-  };
+  const row = await prisma.edcUnit.update({
+    where: { id: input.id },
+    data: {
+      status: toStatus,
+      regionalOffice: toRo,
+      merchantId,
+      mutationHistory: {
+        create: {
+          mutationType: mutationType as MutationType,
+          fromStatus,
+          toStatus,
+          fromRegionalOffice: fromRo,
+          toRegionalOffice: toRo,
+          notes: input.notes?.trim() || null,
+          mutatedBy: input.actorName ?? "system",
+        },
+      },
+    },
+    include: unitInclude,
+  });
 
-  const updated: EdcAsset = {
-    ...current,
-    status: toStatus,
-    regionalOffice: toRo,
-    merchantId,
-    updatedAt: stamp,
-    mutations: [mutation, ...current.mutations],
-  };
-  assets[idx] = updated;
-  return clone(updated);
+  return mapAsset(row);
 }

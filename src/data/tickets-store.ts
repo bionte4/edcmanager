@@ -1,4 +1,3 @@
-import { MOCK_OPS_TICKETS } from "@/data/noc";
 import { listOlaPolicies } from "@/data/ola-store";
 import {
   createTicket,
@@ -6,17 +5,22 @@ import {
   transitionTicket,
   type NocUser,
   type OpsTicket,
+  type TicketActivityRow,
 } from "@/lib/ticketing";
+import { prisma } from "@/lib/prisma";
+import { computeSlaDeadline, evaluateSlaStatus } from "@/sla";
 import type { WorkflowTicketStatus } from "@/config/noc.config";
 import type { ItsmType, OperationalProcess } from "@/config/itsm.config";
 import type { TicketCategory, TicketLocation } from "@/config/sla.config";
-
-/** Shared in-memory ticket store for Integration API (demo). */
-let tickets: OpsTicket[] = MOCK_OPS_TICKETS.map((t) => ({
-  ...t,
-  updatedAt: t.openedAt,
-  activities: [...t.activities],
-}));
+import type {
+  Prisma,
+  Ticket,
+  TicketActivity,
+  TicketActivityType,
+  TicketStatus,
+  User,
+  Vendor,
+} from "@prisma/client";
 
 const SYSTEM_ACTOR: NocUser = {
   id: "u-integration",
@@ -26,45 +30,155 @@ const SYSTEM_ACTOR: NocUser = {
   isActive: true,
 };
 
-export function listIntegrationTickets(filters?: {
+const ticketInclude = {
+  vendor: true,
+  nocOwner: true,
+  createdBy: true,
+  activities: {
+    include: { actor: true },
+    orderBy: { createdAt: "desc" as const },
+  },
+} satisfies Prisma.TicketInclude;
+
+type TicketWithRelations = Ticket & {
+  vendor: Vendor;
+  nocOwner: User | null;
+  createdBy: User | null;
+  activities: (TicketActivity & { actor: User | null })[];
+};
+
+function mapActivity(
+  row: TicketActivity & { actor: User | null }
+): TicketActivityRow {
+  return {
+    id: row.id,
+    type: row.activityType as TicketActivityRow["type"],
+    note: row.note ?? "",
+    actorName: row.actor?.name ?? SYSTEM_ACTOR.name,
+    at: row.createdAt.toISOString(),
+    fromStatus: (row.fromStatus as WorkflowTicketStatus | null) ?? undefined,
+    toStatus: (row.toStatus as WorkflowTicketStatus | null) ?? undefined,
+  };
+}
+
+function mapTicket(row: TicketWithRelations): OpsTicket {
+  return {
+    id: row.id,
+    ticketNumber: row.ticketNumber,
+    itsmType: row.itsmType as ItsmType,
+    process: row.process as OperationalProcess,
+    merchantId: row.merchantId,
+    location: row.location as TicketLocation,
+    category: row.category as TicketCategory,
+    status: row.status as WorkflowTicketStatus,
+    description: row.description ?? "",
+    vendorName: row.vendor.name,
+    technicianName: row.technicianName ?? undefined,
+    nocOwnerId: row.nocOwnerId ?? undefined,
+    nocOwnerName: row.nocOwner?.name,
+    createdById: row.createdById ?? undefined,
+    createdByName: row.createdBy?.name,
+    problemId: row.problemId,
+    relatedChangeId: row.relatedChangeId,
+    externalTicketId: row.externalTicketId,
+    externalSystem: row.externalSystem,
+    openedAt: row.openedAt.toISOString(),
+    closedAt: row.closedAt?.toISOString() ?? null,
+    acknowledgedAt: row.acknowledgedAt?.toISOString() ?? null,
+    dispatchedAt: row.dispatchedAt?.toISOString() ?? null,
+    updatedAt: row.updatedAt.toISOString(),
+    activities: row.activities.map(mapActivity),
+  };
+}
+
+async function findTicketRow(
+  idOrNumber: string
+): Promise<TicketWithRelations | null> {
+  const byId = await prisma.ticket.findFirst({
+    where: {
+      OR: [{ id: idOrNumber }, { ticketNumber: idOrNumber }],
+    },
+    include: ticketInclude,
+  });
+  return byId;
+}
+
+async function resolveVendorId(vendorName: string): Promise<string> {
+  const name = vendorName.trim() || "Vendor 1";
+  const vendor = await prisma.vendor.findFirst({
+    where: { name: { equals: name, mode: "insensitive" }, isActive: true },
+  });
+  if (!vendor) {
+    throw new Error(`Vendor tidak ditemukan: ${name}`);
+  }
+  return vendor.id;
+}
+
+function persistedSlaStatus(
+  ticket: Pick<OpsTicket, "location" | "category" | "itsmType" | "openedAt" | "closedAt">,
+  asOf = new Date()
+) {
+  return evaluateSlaStatus(
+    {
+      location: ticket.location,
+      category: ticket.category,
+      itsmType: ticket.itsmType,
+      openedAt: new Date(ticket.openedAt),
+      closedAt: ticket.closedAt ? new Date(ticket.closedAt) : null,
+    },
+    asOf
+  ).status;
+}
+
+export async function listIntegrationTickets(filters?: {
   itsmType?: ItsmType;
   status?: WorkflowTicketStatus;
   externalSystem?: string;
   updatedSince?: string;
-}): OpsTicket[] {
-  return tickets
-    .filter((t) => {
-      if (filters?.itsmType && t.itsmType !== filters.itsmType) return false;
-      if (filters?.status && t.status !== filters.status) return false;
-      if (filters?.externalSystem && t.externalSystem !== filters.externalSystem) {
-        return false;
-      }
-      if (filters?.updatedSince) {
-        const since = Date.parse(filters.updatedSince);
-        const updated = Date.parse(t.updatedAt ?? t.openedAt);
-        if (Number.isFinite(since) && updated < since) return false;
-      }
-      return true;
-    })
-    .map((t) => ({ ...t, activities: [...t.activities] }));
+}): Promise<OpsTicket[]> {
+  const where: Prisma.TicketWhereInput = {};
+  if (filters?.itsmType) where.itsmType = filters.itsmType;
+  if (filters?.status) where.status = filters.status as TicketStatus;
+  if (filters?.externalSystem) where.externalSystem = filters.externalSystem;
+  if (filters?.updatedSince) {
+    const since = new Date(filters.updatedSince);
+    if (Number.isFinite(since.getTime())) {
+      where.updatedAt = { gte: since };
+    }
+  }
+
+  const rows = await prisma.ticket.findMany({
+    where,
+    include: ticketInclude,
+    orderBy: { updatedAt: "desc" },
+  });
+  return rows.map(mapTicket);
 }
 
-export function getTicketById(id: string): OpsTicket | undefined {
-  return tickets.find((t) => t.id === id || t.ticketNumber === id);
+/** Ops UI listing — same DB source as integration list. */
+export async function listOpsTickets(): Promise<OpsTicket[]> {
+  return listIntegrationTickets();
 }
 
-export function getTicketByExternal(
+export async function getTicketById(
+  id: string
+): Promise<OpsTicket | undefined> {
+  const row = await findTicketRow(id);
+  return row ? mapTicket(row) : undefined;
+}
+
+export async function getTicketByExternal(
   externalSystem: string,
   externalTicketId: string
-): OpsTicket | undefined {
-  return tickets.find(
-    (t) =>
-      t.externalSystem === externalSystem &&
-      t.externalTicketId === externalTicketId
-  );
+): Promise<OpsTicket | undefined> {
+  const row = await prisma.ticket.findFirst({
+    where: { externalSystem, externalTicketId },
+    include: ticketInclude,
+  });
+  return row ? mapTicket(row) : undefined;
 }
 
-export function createIntegrationTicket(input: {
+export async function createIntegrationTicket(input: {
   merchantId: string;
   location: TicketLocation;
   category: TicketCategory;
@@ -75,14 +189,14 @@ export function createIntegrationTicket(input: {
   externalTicketId: string;
   externalSystem: string;
   openedAt?: string;
-}): OpsTicket {
+}): Promise<OpsTicket> {
   const externalTicketId = input.externalTicketId.trim();
   const externalSystem = input.externalSystem.trim();
   if (!externalTicketId || !externalSystem) {
     throw new Error("externalTicketId and externalSystem are required");
   }
 
-  const existing = getTicketByExternal(externalSystem, externalTicketId);
+  const existing = await getTicketByExternal(externalSystem, externalTicketId);
   if (existing) {
     throw Object.assign(
       new Error(
@@ -92,7 +206,7 @@ export function createIntegrationTicket(input: {
     );
   }
 
-  const ticket = createTicket({
+  const draft = createTicket({
     merchantId: input.merchantId,
     location: input.location,
     category: input.category,
@@ -106,11 +220,49 @@ export function createIntegrationTicket(input: {
     openedAt: input.openedAt ? new Date(input.openedAt) : new Date(),
   });
 
-  tickets = [ticket, ...tickets];
-  return { ...ticket };
+  const vendorId = await resolveVendorId(draft.vendorName);
+  const openedAt = new Date(draft.openedAt);
+  const deadline = computeSlaDeadline(
+    draft.location,
+    draft.category,
+    openedAt,
+    draft.itsmType
+  );
+  const slaStatus = persistedSlaStatus(draft, openedAt);
+
+  const created = await prisma.ticket.create({
+    data: {
+      ticketNumber: draft.ticketNumber,
+      itsmType: draft.itsmType,
+      process: draft.process,
+      merchantId: draft.merchantId,
+      location: draft.location,
+      category: draft.category,
+      status: draft.status as TicketStatus,
+      slaStatus,
+      openedAt,
+      slaDeadlineAt: deadline,
+      description: draft.description,
+      externalTicketId: draft.externalTicketId,
+      externalSystem: draft.externalSystem,
+      vendorId,
+      activities: {
+        create: draft.activities.map((a) => ({
+          activityType: a.type as TicketActivityType,
+          note: a.note,
+          toStatus: (a.toStatus as TicketStatus | undefined) ?? null,
+          fromStatus: (a.fromStatus as TicketStatus | undefined) ?? null,
+          createdAt: new Date(a.at),
+        })),
+      },
+    },
+    include: ticketInclude,
+  });
+
+  return mapTicket(created);
 }
 
-export function patchIntegrationTicket(
+export async function patchIntegrationTicket(
   id: string,
   patch: {
     status?: WorkflowTicketStatus;
@@ -119,11 +271,14 @@ export function patchIntegrationTicket(
     problemId?: string;
     relatedChangeId?: string;
   }
-): OpsTicket {
-  const idx = tickets.findIndex((t) => t.id === id || t.ticketNumber === id);
-  if (idx < 0) throw Object.assign(new Error("Ticket not found"), { status: 404 });
+): Promise<OpsTicket> {
+  const row = await findTicketRow(id);
+  if (!row) {
+    throw Object.assign(new Error("Ticket not found"), { status: 404 });
+  }
 
-  let current = tickets[idx]!;
+  let current = mapTicket(row);
+  const previousActivityIds = new Set(current.activities.map((a) => a.id));
 
   if (patch.status && patch.status !== current.status) {
     current = transitionTicket(current, patch.status, SYSTEM_ACTOR, {
@@ -132,46 +287,78 @@ export function patchIntegrationTicket(
     });
   }
 
-  const now = new Date().toISOString();
+  const now = new Date();
   current = {
     ...current,
     description: patch.description?.trim() || current.description,
     technicianName: patch.technicianName?.trim() || current.technicianName,
     problemId: patch.problemId ?? current.problemId,
     relatedChangeId: patch.relatedChangeId ?? current.relatedChangeId,
-    updatedAt: now,
+    updatedAt: now.toISOString(),
   };
 
-  tickets[idx] = current;
-  return { ...current, activities: [...current.activities] };
+  const newActivities = current.activities.filter(
+    (a) => !previousActivityIds.has(a.id)
+  );
+
+  const slaStatus = persistedSlaStatus(current, now);
+
+  const updated = await prisma.ticket.update({
+    where: { id: row.id },
+    data: {
+      status: current.status as TicketStatus,
+      description: current.description,
+      technicianName: current.technicianName ?? null,
+      problemId: current.problemId ?? null,
+      relatedChangeId: current.relatedChangeId ?? null,
+      acknowledgedAt: current.acknowledgedAt
+        ? new Date(current.acknowledgedAt)
+        : null,
+      dispatchedAt: current.dispatchedAt
+        ? new Date(current.dispatchedAt)
+        : null,
+      closedAt: current.closedAt ? new Date(current.closedAt) : null,
+      slaStatus,
+      activities: {
+        create: newActivities.map((a) => ({
+          activityType: a.type as TicketActivityType,
+          note: a.note,
+          fromStatus: (a.fromStatus as TicketStatus | undefined) ?? null,
+          toStatus: (a.toStatus as TicketStatus | undefined) ?? null,
+          createdAt: new Date(a.at),
+        })),
+      },
+    },
+    include: ticketInclude,
+  });
+
+  return mapTicket(updated);
 }
 
-export function addTicketEvent(
+export async function addTicketEvent(
   id: string,
   note: string
-): OpsTicket {
-  const idx = tickets.findIndex((t) => t.id === id || t.ticketNumber === id);
-  if (idx < 0) throw Object.assign(new Error("Ticket not found"), { status: 404 });
+): Promise<OpsTicket> {
+  const row = await findTicketRow(id);
+  if (!row) {
+    throw Object.assign(new Error("Ticket not found"), { status: 404 });
+  }
   if (!note.trim()) throw new Error("note is required");
 
-  const now = new Date().toISOString();
-  const current = tickets[idx]!;
-  const updated: OpsTicket = {
-    ...current,
-    updatedAt: now,
-    activities: [
-      {
-        id: `a-${Date.now()}`,
-        type: "NOTE",
-        note: note.trim(),
-        actorName: SYSTEM_ACTOR.name,
-        at: now,
+  const updated = await prisma.ticket.update({
+    where: { id: row.id },
+    data: {
+      activities: {
+        create: {
+          activityType: "NOTE",
+          note: note.trim(),
+        },
       },
-      ...current.activities,
-    ],
-  };
-  tickets[idx] = updated;
-  return { ...updated, activities: [...updated.activities] };
+    },
+    include: ticketInclude,
+  });
+
+  return mapTicket(updated);
 }
 
 export function toIntegrationDto(ticket: OpsTicket, asOf = new Date()) {

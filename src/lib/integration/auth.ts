@@ -4,11 +4,13 @@ import type {
 } from "@/config/integration.config";
 import { findIntegrationClientByApiKey } from "@/data/integration-clients-store";
 
-export function findClientByApiKey(raw: string | null): IntegrationClient | null {
+export async function findClientByApiKey(
+  raw: string | null
+): Promise<IntegrationClient | null> {
   if (!raw) return null;
   const key = raw.trim();
   if (!key) return null;
-  return findIntegrationClientByApiKey(key) ?? null;
+  return (await findIntegrationClientByApiKey(key)) ?? null;
 }
 
 /** Accept `Authorization: Bearer <key>` or `X-Api-Key: <key>`. */
@@ -24,12 +26,12 @@ export function extractApiKey(request: Request): string | null {
   return token;
 }
 
-export function requireIntegrationClient(
+export async function requireIntegrationClient(
   request: Request,
   scope: IntegrationScope
-): IntegrationClient {
+): Promise<IntegrationClient> {
   const apiKey = extractApiKey(request);
-  const client = findClientByApiKey(apiKey);
+  const client = await findClientByApiKey(apiKey);
   if (!client) {
     throw Object.assign(new Error("Invalid or missing API key"), { status: 401 });
   }

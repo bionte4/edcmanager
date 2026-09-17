@@ -1,12 +1,12 @@
 import {
   DEMO_AS_OF,
-  MOCK_BUFFER_STOCK,
   SLA_LABELS,
   type BufferStockRow,
 } from "@/data/dashboard";
 import { listOlaPolicies } from "@/data/ola-store";
 import { listIntegrationTickets } from "@/data/tickets-store";
-import { MOCK_VENDOR_METRICS } from "@/data/vendors";
+import { listAssets } from "@/data/assets-store";
+import { loadVendorMetrics, type VendorMonthlyMetrics } from "@/data/vendors";
 import {
   listAttendance,
   listWfmShifts,
@@ -18,6 +18,7 @@ import { enrichOpsTicket } from "@/lib/ticketing";
 import { OLA_STATUS_LABELS } from "@/ola";
 import { UPTIME_TARGET_PERCENT } from "@/config/sla.config";
 import { BUFFER_STOCK_MIN_PERCENT } from "@/config/inventory.config";
+import { REGIONAL_OFFICES } from "@/config/assets.config";
 import {
   PERSONNEL_ATTENDANCE_FLOOR_PERCENT,
   PERSONNEL_SCORE_ATTENDANCE_WEIGHT,
@@ -49,9 +50,9 @@ export interface OpsReportSummary {
     roBelow: number;
     rows: BufferStockRow[];
   };
-  vendors: typeof MOCK_VENDOR_METRICS;
+  vendors: VendorMonthlyMetrics[];
   uptimeTarget: number;
-  wfm: ReturnType<typeof wfmKpis> & {
+  wfm: Awaited<ReturnType<typeof wfmKpis>> & {
     rosterPeriodCount: number;
     attendanceSample: number;
   };
@@ -216,19 +217,20 @@ function resolveUserRole(userId?: string | null, name?: string | null): string {
   return "UNKNOWN";
 }
 
-export function buildPersonnelPerformance(
+export async function buildPersonnelPerformance(
   enrichedTickets: ReturnType<typeof enrichOpsTicket>[],
   fromYmd: string,
   toYmd: string,
-  attendanceLogs: AttendanceLog[] = listAttendance(500)
-): PersonnelPerformanceRow[] {
+  attendanceLogs?: AttendanceLog[]
+): Promise<PersonnelPerformanceRow[]> {
+  const logs = attendanceLogs ?? (await listAttendance(500));
   const map = new Map<string, Acc>();
 
-  const shifts = listWfmShifts({ from: fromYmd, to: toYmd });
+  const shifts = await listWfmShifts({ from: fromYmd, to: toYmd });
   for (const s of shifts) {
     const acc = ensureAcc(map, s.userId, s.userName, s.role, "INTERNAL");
     acc.shiftsScheduled += 1;
-    const log = attendanceLogs.find(
+    const log = logs.find(
       (a) =>
         a.userId === s.userId &&
         a.shiftDate === s.shiftDate &&
@@ -240,7 +242,7 @@ export function buildPersonnelPerformance(
     else acc.absent += 1;
   }
 
-  for (const a of attendanceLogs) {
+  for (const a of logs) {
     if (a.shiftDate < fromYmd || a.shiftDate > toYmd) continue;
     const acc = ensureAcc(map, a.userId, a.userName, a.role, "INTERNAL");
     if (acc.shiftsScheduled === 0) {
@@ -358,13 +360,13 @@ export function buildPersonnelPerformance(
   );
 }
 
-export function buildOpsReport(
+export async function buildOpsReport(
   asOf: Date = DEMO_AS_OF,
   period?: ReportPeriodInput
-): {
+): Promise<{
   summary: OpsReportSummary;
   tickets: OpsReportTicketRow[];
-} {
+}> {
   const fromYmd = period?.from ?? asOf.toISOString().slice(0, 10);
   const toYmd = period?.to ?? asOf.toISOString().slice(0, 10);
   const from = parseYmdStart(fromYmd);
@@ -374,7 +376,7 @@ export function buildOpsReport(
   }
 
   const olaPolicies = listOlaPolicies({ activeOnly: true });
-  const enrichedAll = listIntegrationTickets().map((t) =>
+  const enrichedAll = (await listIntegrationTickets()).map((t) =>
     enrichOpsTicket(t, asOf, olaPolicies)
   );
   const enriched = enrichedAll.filter((t) => inPeriod(t.openedAt, from, to));
@@ -423,17 +425,37 @@ export function buildOpsReport(
     };
   });
 
-  const bufferOk = MOCK_BUFFER_STOCK.filter((b) => !b.belowThreshold).length;
-  const wfm = wfmKpis(asOf);
+  const assets = await listAssets();
+  const bufferRows: BufferStockRow[] = REGIONAL_OFFICES.map((ro) => {
+    const rows = assets.filter((a) => a.regionalOffice === ro);
+    const totalUnits = rows.length;
+    const bufferUnits = rows.filter((a) => a.status === "BUFFER").length;
+    const deployedUnits = rows.filter((a) => a.status === "DEPLOYED").length;
+    const idleUnits = rows.filter((a) => a.status === "IDLE").length;
+    const bufferPercent =
+      totalUnits > 0 ? (bufferUnits / totalUnits) * 100 : 0;
+    return {
+      regionalOffice: ro,
+      totalUnits,
+      bufferUnits,
+      deployedUnits,
+      idleUnits,
+      bufferPercent,
+      belowThreshold: bufferPercent < BUFFER_STOCK_MIN_PERCENT,
+    };
+  });
+  const bufferOk = bufferRows.filter((b) => !b.belowThreshold).length;
+  const wfm = await wfmKpis(asOf);
   const label = period?.label ?? `${fromYmd} → ${toYmd}`;
-  const attendanceInPeriod = listAttendance(500).filter((a) =>
+  const allAttendance = await listAttendance(500);
+  const attendanceInPeriod = allAttendance.filter((a) =>
     inPeriod(a.loggedAt, from, to)
   );
-  const personnelRows = buildPersonnelPerformance(
+  const personnelRows = await buildPersonnelPerformance(
     enriched,
     fromYmd,
     toYmd,
-    listAttendance(500)
+    allAttendance
   );
   const avgScore =
     personnelRows.length > 0
@@ -457,16 +479,18 @@ export function buildOpsReport(
       },
       buffer: {
         minPercent: BUFFER_STOCK_MIN_PERCENT,
-        roTotal: MOCK_BUFFER_STOCK.length,
+        roTotal: bufferRows.length,
         roOk: bufferOk,
-        roBelow: MOCK_BUFFER_STOCK.length - bufferOk,
-        rows: MOCK_BUFFER_STOCK,
+        roBelow: bufferRows.length - bufferOk,
+        rows: bufferRows,
       },
-      vendors: MOCK_VENDOR_METRICS,
+      vendors: await loadVendorMetrics(),
       uptimeTarget: UPTIME_TARGET_PERCENT,
       wfm: {
         ...wfm,
-        rosterPeriodCount: listWfmShifts({ from: fromYmd, to: toYmd }).length,
+        rosterPeriodCount: (
+          await listWfmShifts({ from: fromYmd, to: toYmd })
+        ).length,
         attendanceSample: attendanceInPeriod.length,
       },
       personnel: {
@@ -490,11 +514,11 @@ export function buildOpsReport(
   };
 }
 
-export function buildOpsReportWorkbook(
+export async function buildOpsReportWorkbook(
   asOf: Date = DEMO_AS_OF,
   period?: ReportPeriodInput
-): Buffer {
-  const { summary, tickets } = buildOpsReport(asOf, period);
+): Promise<Buffer> {
+  const { summary, tickets } = await buildOpsReport(asOf, period);
   const wb = XLSX.utils.book_new();
 
   const summaryRows = [

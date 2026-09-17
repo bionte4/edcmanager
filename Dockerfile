@@ -41,6 +41,8 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/package.json ./package.json
+# seed.mjs needs generated client
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 # Prisma CLI pulls @prisma/config → effect/c12/… (not in standalone tree)
 USER root

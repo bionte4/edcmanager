@@ -26,7 +26,7 @@ async function requireUser(): Promise<AuthUser> {
   if (!token) throw new Error("Unauthorized");
   const session = await verifySessionToken(token);
   if (!session) throw new Error("Unauthorized");
-  const stored = findUserById(session.sub);
+  const stored = await findUserById(session.sub);
   if (!stored || !stored.isActive) throw new Error("Unauthorized");
   return sessionToAuthUser(session);
 }
@@ -49,14 +49,21 @@ export async function GET(request: Request) {
     const shiftType = (searchParams.get("shiftType") as ShiftType | null) ?? undefined;
     const swapStatus = (searchParams.get("swapStatus") as SwapRequestStatus | null) ?? undefined;
 
-    return NextResponse.json({
-      kpis: wfmKpis(),
-      shifts: listWfmShifts({ date, from, to, shiftType }),
-      attendance: listAttendance(80),
-      swaps: listSwapRequests({
+    const [kpis, shifts, attendance, swaps] = await Promise.all([
+      wfmKpis(),
+      listWfmShifts({ date, from, to, shiftType }),
+      listAttendance(80),
+      listSwapRequests({
         status: swapStatus,
         userId: can(user, "wfm:approve") ? undefined : user.id,
       }),
+    ]);
+
+    return NextResponse.json({
+      kpis,
+      shifts,
+      attendance,
+      swaps,
       me: { id: user.id, name: user.name, role: user.role },
     });
   } catch (e) {
@@ -84,14 +91,14 @@ export async function POST(request: Request) {
 
     if (body.action === "swap_request") {
       assertCan(user, "wfm:read");
-      const swap = createSwapRequest({
+      const swap = await createSwapRequest({
         requesterId: user.id,
         requesterName: user.name,
         requesterShiftId: body.requesterShiftId ?? "",
         targetShiftId: body.targetShiftId ?? "",
         reason: body.reason ?? "",
       });
-      return NextResponse.json({ swap, kpis: wfmKpis() }, { status: 201 });
+      return NextResponse.json({ swap, kpis: await wfmKpis() }, { status: 201 });
     }
 
     if (body.action === "swap_decide") {
@@ -99,7 +106,7 @@ export async function POST(request: Request) {
       if (!body.id || !body.decision) {
         return NextResponse.json({ error: "id dan decision wajib." }, { status: 400 });
       }
-      const swap = decideSwapRequest({
+      const swap = await decideSwapRequest({
         id: body.id,
         decision: body.decision,
         actorId: user.id,
@@ -108,8 +115,8 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({
         swap,
-        shifts: listWfmShifts(),
-        kpis: wfmKpis(),
+        shifts: await listWfmShifts(),
+        kpis: await wfmKpis(),
       });
     }
 
@@ -118,8 +125,8 @@ export async function POST(request: Request) {
       if (!body.id) {
         return NextResponse.json({ error: "id wajib." }, { status: 400 });
       }
-      const swap = cancelSwapRequest(body.id, user.id);
-      return NextResponse.json({ swap, kpis: wfmKpis() });
+      const swap = await cancelSwapRequest(body.id, user.id);
+      return NextResponse.json({ swap, kpis: await wfmKpis() });
     }
 
     if (body.action === "set_duty") {
@@ -127,8 +134,8 @@ export async function POST(request: Request) {
       if (!body.shiftId || !body.status) {
         return NextResponse.json({ error: "shiftId dan status wajib." }, { status: 400 });
       }
-      const shift = setShiftDuty(body.shiftId, body.status);
-      return NextResponse.json({ shift, kpis: wfmKpis() });
+      const shift = await setShiftDuty(body.shiftId, body.status);
+      return NextResponse.json({ shift, kpis: await wfmKpis() });
     }
 
     return NextResponse.json({ error: "action tidak dikenal." }, { status: 400 });

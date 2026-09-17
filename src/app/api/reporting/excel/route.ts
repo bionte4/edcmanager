@@ -16,7 +16,7 @@ async function requireUser(): Promise<AuthUser> {
   if (!token) throw new Error("Unauthorized");
   const session = await verifySessionToken(token);
   if (!session) throw new Error("Unauthorized");
-  const stored = findUserById(session.sub);
+  const stored = await findUserById(session.sub);
   if (!stored || !stored.isActive) throw new Error("Unauthorized");
   return sessionToAuthUser(session);
 }
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     const to = url.searchParams.get("to") ?? undefined;
     const label = url.searchParams.get("label") ?? undefined;
     const period = from && to ? { from, to, label } : undefined;
-    const buffer = buildOpsReportWorkbook(DEMO_AS_OF, period);
+    const buffer = await buildOpsReportWorkbook(DEMO_AS_OF, period);
     const stamp = `${from ?? "all"}_${to ?? new Date().toISOString().slice(0, 10)}`;
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

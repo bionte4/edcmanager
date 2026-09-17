@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/table";
 import {
   MOCK_VENDOR_METRICS,
-  UPTIME_TARGET_PERCENT,
   buildVendorComparison,
   type VendorMonthlyMetrics,
 } from "@/data/vendors";
+import { UPTIME_TARGET_PERCENT } from "@/config/sla.config";
 import { cn, formatPercent } from "@/lib/utils";
 
 function VendorSummaryCard({ vendor }: { vendor: VendorMonthlyMetrics }) {
