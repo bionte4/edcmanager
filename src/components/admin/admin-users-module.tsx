@@ -134,7 +134,7 @@ export function AdminUsersModule() {
   if (!can("user:manage")) {
     return (
       <Card>
-        <CardContent className="py-8 text-sm text-muted-foreground">
+        <CardContent className="py-4 text-sm text-muted-foreground">
           Anda tidak punya permission <span className="font-mono">user:manage</span>.
         </CardContent>
       </Card>
@@ -142,7 +142,7 @@ export function AdminUsersModule() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr]">
         <Card>
           <CardHeader>
@@ -231,9 +231,9 @@ export function AdminUsersModule() {
               Matrix default dari config RBAC (nanti bisa dari tabel RolePermission)
             </p>
           </CardHeader>
-          <CardContent className="max-h-[420px] space-y-3 overflow-auto">
+          <CardContent className="max-h-[420px] space-y-2 overflow-auto">
             {ROLES.map((r) => (
-              <div key={r} className="rounded-md border border-border p-2.5">
+              <div key={r} className="rounded-md border border-border p-2">
                 <p className="mb-1.5 text-xs font-semibold">{ROLE_LABELS[r]}</p>
                 <div className="flex flex-wrap gap-1">
                   {ROLE_PERMISSIONS[r].map((p) => (
@@ -249,7 +249,7 @@ export function AdminUsersModule() {
       </div>
 
       <section className="rounded-lg border border-border bg-card">
-        <div className="border-b border-border p-4">
+        <div className="border-b border-border px-3 py-2">
           <h2 className="text-sm font-semibold tracking-wide">User Directory</h2>
           <p className="text-xs text-muted-foreground">CRUD + soft delete · guarded by user:manage</p>
         </div>
@@ -278,13 +278,13 @@ export function AdminUsersModule() {
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
-                    <Button type="button" size="sm" variant="outline" onClick={() => startEdit(user)}>
+                    <Button type="button" size="xs" variant="outline" onClick={() => startEdit(user)}>
                       <Pencil className="h-3.5 w-3.5" />
                       Edit
                     </Button>
                     <Button
                       type="button"
-                      size="sm"
+                      size="xs"
                       variant="outline"
                       onClick={() => void onDelete(user.id)}
                     >

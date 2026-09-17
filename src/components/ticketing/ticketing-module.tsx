@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Plus, Ticket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuth } from "@/components/auth/auth-provider";
 import {
   TICKET_STATUS_LABELS,
   type WorkflowTicketStatus,
@@ -25,7 +26,7 @@ import {
   type OperationalProcess,
 } from "@/config/itsm.config";
 import { DEMO_AS_OF, LOCATION_LABELS, CATEGORY_LABELS, SLA_LABELS } from "@/data/dashboard";
-import { MOCK_OPS_TICKETS, MOCK_USERS, ROLE_LABELS } from "@/data/noc";
+import { MOCK_OPS_TICKETS, MOCK_USERS } from "@/data/noc";
 import {
   assignTicket,
   createTicket,
@@ -39,6 +40,7 @@ import {
 import { AiInsightPanel } from "@/components/ai/ai-insight-panel";
 import type { TicketCategory, TicketLocation } from "@/config/sla.config";
 import { formatDateTime } from "@/lib/utils";
+import { OLA_STATUS_LABELS, type OlaPolicy } from "@/ola";
 
 function slaVariant(status: string): "safe" | "warning" | "breached" | "secondary" {
   if (status === "ON_TRACK" || status === "ACHIEVED") return "safe";
@@ -47,7 +49,6 @@ function slaVariant(status: string): "safe" | "warning" | "breached" | "secondar
   return "secondary";
 }
 
-const ACTOR = MOCK_USERS.find((u) => u.id === "u-noc-1")!;
 const ITSM_FILTERS: Array<ItsmType | "ALL"> = [
   "ALL",
   "INCIDENT",
@@ -57,8 +58,9 @@ const ITSM_FILTERS: Array<ItsmType | "ALL"> = [
 ];
 
 export function TicketingModule() {
+  const { user } = useAuth();
   const [tickets, setTickets] = useState<OpsTicket[]>(MOCK_OPS_TICKETS);
-  const [actorId, setActorId] = useState(ACTOR.id);
+  const [olaPolicies, setOlaPolicies] = useState<OlaPolicy[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(MOCK_OPS_TICKETS[0]?.id ?? null);
   const [typeFilter, setTypeFilter] = useState<ItsmType | "ALL">("ALL");
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +77,30 @@ export function TicketingModule() {
   const [assignToId, setAssignToId] = useState("u-noc-1");
   const [linkProblemId, setLinkProblemId] = useState("t-prb-1");
 
-  const actor = MOCK_USERS.find((u) => u.id === actorId) ?? ACTOR;
+  const loadOla = useCallback(async () => {
+    try {
+      const res = await fetch("/api/ola?activeOnly=1", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { policies?: OlaPolicy[] };
+      setOlaPolicies(data.policies ?? []);
+    } catch {
+      /* keep defaults via enrichOpsTicket */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadOla();
+  }, [loadOla]);
+
+  const actor: NocUser | null = user
+    ? {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+      }
+    : null;
   const nocCandidates = MOCK_USERS.filter(
     (u) => u.role === "NOC" || u.role === "SUPERVISOR"
   );
@@ -86,8 +111,13 @@ export function TicketingModule() {
   );
 
   const enriched = useMemo(
-    () => tickets.map((t) => enrichOpsTicket(t, DEMO_AS_OF)),
-    [tickets]
+    () =>
+      tickets.map((t) =>
+        olaPolicies
+          ? enrichOpsTicket(t, DEMO_AS_OF, olaPolicies)
+          : enrichOpsTicket(t, DEMO_AS_OF)
+      ),
+    [tickets, olaPolicies]
   );
 
   const visible = useMemo(
@@ -101,6 +131,9 @@ export function TicketingModule() {
   const selected = enriched.find((t) => t.id === selectedId) ?? null;
   const openCount = enriched.filter((t) => t.status !== "CLOSED" && t.status !== "RESOLVED").length;
   const escalateCount = enriched.filter((t) => t.needsEscalation && t.status !== "CLOSED").length;
+  const olaEscalateCount = enriched.filter(
+    (t) => t.olaNeedsEscalation && t.status !== "CLOSED" && t.status !== "RESOLVED"
+  ).length;
   const counts = useMemo(() => {
     const base = { INCIDENT: 0, REQUEST: 0, PROBLEM: 0, CHANGE: 0 };
     for (const t of enriched) base[t.itsmType] += 1;
@@ -117,6 +150,11 @@ export function TicketingModule() {
     }
   }
 
+  function requireActor(): NocUser {
+    if (!actor) throw new Error("Sesi login tidak valid.");
+    return actor;
+  }
+
   function handleCreate() {
     withFeedback(() => {
       const ticket = createTicket({
@@ -125,7 +163,7 @@ export function TicketingModule() {
         category,
         description,
         vendorName,
-        actor,
+        actor: requireActor(),
         itsmType,
         process,
         openedAt: DEMO_AS_OF,
@@ -143,7 +181,7 @@ export function TicketingModule() {
     const noc = nocCandidates.find((u) => u.id === assignToId);
     if (!noc) return;
     withFeedback(() => {
-      const updated = assignTicket(selected, noc, actor);
+      const updated = assignTicket(selected, noc, requireActor());
       setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
       setMessage(`Tiket di-assign ke ${noc.name}.`);
     });
@@ -152,7 +190,7 @@ export function TicketingModule() {
   function handleTransition(toStatus: WorkflowTicketStatus) {
     if (!selected) return;
     withFeedback(() => {
-      const updated = transitionTicket(selected, toStatus, actor, {
+      const updated = transitionTicket(selected, toStatus, requireActor(), {
         technicianName,
       });
       setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
@@ -163,7 +201,7 @@ export function TicketingModule() {
   function handleLinkProblem() {
     if (!selected) return;
     withFeedback(() => {
-      const updated = linkIncidentToProblem(selected, linkProblemId, actor);
+      const updated = linkIncidentToProblem(selected, linkProblemId, requireActor());
       setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
       setMessage(`Incident di-link ke ${linkProblemId}.`);
     });
@@ -200,25 +238,11 @@ export function TicketingModule() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3">
-        <span className="text-xs text-muted-foreground">Aktor aktif (simulasi):</span>
-        <select
-          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-          value={actorId}
-          onChange={(e) => setActorId(e.target.value)}
-        >
-          {MOCK_USERS.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name} · {ROLE_LABELS[u.role]}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="flex flex-col gap-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <Kpi title="Aktif" value={String(openCount)} />
         <Kpi title="Eskalasi SLA" value={String(escalateCount)} tone="warn" />
+        <Kpi title="Eskalasi OLA" value={String(olaEscalateCount)} tone="warn" />
         <Kpi title="Incident" value={String(counts.INCIDENT)} />
         <Kpi title="Request / Problem / Change" value={`${counts.REQUEST}/${counts.PROBLEM}/${counts.CHANGE}`} />
         <Kpi title="Total" value={String(tickets.length)} />
@@ -229,7 +253,7 @@ export function TicketingModule() {
           <Button
             key={value}
             type="button"
-            size="sm"
+            size="xs"
             variant={typeFilter === value ? "default" : "outline"}
             onClick={() => setTypeFilter(value)}
           >
@@ -238,7 +262,7 @@ export function TicketingModule() {
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+      <div className="grid gap-3 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
@@ -319,7 +343,7 @@ export function TicketingModule() {
             <div className="sm:col-span-2">
               <Field label="Deskripsi">
                 <textarea
-                  className="min-h-[72px] w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
+                  className="min-h-[56px] w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Detail incident / request / problem / change"
@@ -408,7 +432,7 @@ export function TicketingModule() {
                 <Button
                   key={status}
                   type="button"
-                  size="sm"
+                  size="xs"
                   variant="outline"
                   onClick={() => handleTransition(status)}
                 >
@@ -463,10 +487,10 @@ export function TicketingModule() {
       />
 
       <section className="rounded-lg border border-border bg-card">
-        <div className="border-b border-border p-4">
+        <div className="border-b border-border px-3 py-2">
           <h2 className="text-sm font-semibold tracking-wide">Antrian ITSM</h2>
           <p className="text-xs text-muted-foreground">
-            Incident (CM), Request, Problem, Change — SLA per tipe dari config
+            Incident (CM), Request, Problem, Change — SLA kontrak + OLA internal (Ack / Dispatch)
           </p>
         </div>
         <Table>
@@ -478,6 +502,8 @@ export function TicketingModule() {
               <TableHead>Merchant</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>SLA</TableHead>
+              <TableHead>OLA Ack</TableHead>
+              <TableHead>OLA Disp</TableHead>
               <TableHead>Links</TableHead>
               <TableHead>NOC</TableHead>
             </TableRow>
@@ -505,6 +531,27 @@ export function TicketingModule() {
                     {SLA_LABELS[ticket.slaStatus]}
                   </Badge>
                 </TableCell>
+                <TableCell>
+                  {ticket.olaAckStatus ? (
+                    <Badge variant={slaVariant(ticket.olaAckStatus)} title={ticket.ola.acknowledge?.policyName}>
+                      {OLA_STATUS_LABELS[ticket.olaAckStatus]}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {ticket.olaDispatchStatus ? (
+                    <Badge
+                      variant={slaVariant(ticket.olaDispatchStatus)}
+                      title={ticket.ola.dispatch?.policyName}
+                    >
+                      {OLA_STATUS_LABELS[ticket.olaDispatchStatus]}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell className="font-mono text-[10px] text-muted-foreground">
                   {ticket.problemId ? `PRB:${ticket.problemId}` : ""}
                   {ticket.relatedChangeId ? ` CHG:${ticket.relatedChangeId}` : ""}
@@ -519,7 +566,7 @@ export function TicketingModule() {
 
       {selected && (
         <section className="rounded-lg border border-border bg-card">
-          <div className="border-b border-border p-4">
+          <div className="border-b border-border px-3 py-2">
             <h2 className="text-sm font-semibold tracking-wide">
               Activity Log · {selected.ticketNumber}
             </h2>
@@ -530,11 +577,17 @@ export function TicketingModule() {
             <p className="mt-1 text-xs text-muted-foreground">{selected.description}</p>
             <p className="mt-1 font-mono text-[11px] text-muted-foreground">
               Masuk {formatDateTime(selected.openedAt)} · elapsed {selected.elapsedLabel}
+              {selected.ola.acknowledge
+                ? ` · OLA Ack ${OLA_STATUS_LABELS[selected.ola.acknowledge.status]} (${selected.olaAckLabel})`
+                : ""}
+              {selected.ola.dispatch
+                ? ` · OLA Disp ${OLA_STATUS_LABELS[selected.ola.dispatch.status]} (${selected.olaDispatchLabel})`
+                : ""}
             </p>
           </div>
           <ul className="divide-y divide-border">
             {selected.activities.map((activity) => (
-              <li key={activity.id} className="flex flex-col gap-0.5 px-4 py-3 text-sm">
+              <li key={activity.id} className="flex flex-col gap-0.5 px-3 py-2 text-xs">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline">{activity.type}</Badge>
                   <span className="font-medium">{activity.actorName}</span>
@@ -568,7 +621,7 @@ function Kpi({
       </CardHeader>
       <CardContent>
         <p
-          className={`font-mono text-2xl font-semibold tabular-nums ${
+          className={`font-mono text-xl font-semibold tabular-nums ${
             tone === "warn" ? "text-sla-warning" : ""
           }`}
         >

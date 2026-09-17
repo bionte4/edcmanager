@@ -9,7 +9,35 @@ import {
   type OperationalProcess,
 } from "@/config/itsm.config";
 import { computeSlaDeadline, evaluateSlaStatus } from "@/sla";
+import {
+  evaluateTicketOla,
+  formatOlaElapsed,
+  type OlaPolicy,
+  type TicketOlaBundle,
+} from "@/ola";
+import {
+  DEFAULT_OLA_POLICIES,
+  OLA_WARNING_THRESHOLD,
+} from "@/config/ola.config";
 import type { TicketCategory, TicketLocation } from "@/config/sla.config";
+
+function defaultOlaPolicies(): OlaPolicy[] {
+  const updatedAt = new Date(0).toISOString();
+  return DEFAULT_OLA_POLICIES.map((seed) => ({
+    id: seed.id,
+    name: seed.name,
+    stage: seed.stage,
+    limitMinutes: seed.limitMinutes,
+    warningThreshold: seed.warningThreshold ?? OLA_WARNING_THRESHOLD,
+    itsmType: seed.itsmType ?? "*",
+    location: seed.location ?? "*",
+    category: seed.category ?? "*",
+    process: seed.process ?? "*",
+    isActive: seed.isActive ?? true,
+    priority: seed.priority ?? 0,
+    updatedAt,
+  }));
+}
 
 export type UserRole = "ADMIN" | "NOC" | "SUPERVISOR" | "VENDOR_TECH" | "OPS_MANAGER";
 export type ShiftType = "MORNING" | "AFTERNOON" | "NIGHT";
@@ -253,7 +281,11 @@ export function linkIncidentToProblem(
   };
 }
 
-export function enrichOpsTicket(ticket: OpsTicket, asOf: Date = new Date()) {
+export function enrichOpsTicket(
+  ticket: OpsTicket,
+  asOf: Date = new Date(),
+  olaPolicies: OlaPolicy[] = defaultOlaPolicies()
+) {
   const evaluation = evaluateSlaStatus(
     {
       location: ticket.location,
@@ -271,6 +303,23 @@ export function enrichOpsTicket(ticket: OpsTicket, asOf: Date = new Date()) {
     ticket.itsmType
   );
 
+  const ola: TicketOlaBundle = evaluateTicketOla(
+    {
+      itsmType: ticket.itsmType,
+      process: ticket.process,
+      location: ticket.location,
+      category: ticket.category,
+      openedAt: new Date(ticket.openedAt),
+      acknowledgedAt: ticket.acknowledgedAt
+        ? new Date(ticket.acknowledgedAt)
+        : null,
+      dispatchedAt: ticket.dispatchedAt ? new Date(ticket.dispatchedAt) : null,
+      closedAt: ticket.closedAt ? new Date(ticket.closedAt) : null,
+    },
+    olaPolicies,
+    asOf
+  );
+
   return {
     ...ticket,
     slaStatus: evaluation.status,
@@ -279,5 +328,15 @@ export function enrichOpsTicket(ticket: OpsTicket, asOf: Date = new Date()) {
     deadlineAt: deadline.toISOString(),
     needsEscalation:
       evaluation.status === "WARNING" || evaluation.status === "BREACHED",
+    ola,
+    olaAckStatus: ola.acknowledge?.status ?? null,
+    olaAckLabel: ola.acknowledge
+      ? `${formatOlaElapsed(ola.acknowledge)}`
+      : null,
+    olaDispatchStatus: ola.dispatch?.status ?? null,
+    olaDispatchLabel: ola.dispatch
+      ? `${formatOlaElapsed(ola.dispatch)}`
+      : null,
+    olaNeedsEscalation: ola.needsEscalation,
   };
 }

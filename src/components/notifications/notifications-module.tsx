@@ -72,7 +72,7 @@ export function NotificationsModule() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-1">
@@ -92,7 +92,7 @@ export function NotificationsModule() {
             <CardTitle>Logged Emails</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="font-mono text-2xl font-semibold tabular-nums">{rows.length}</p>
+            <p className="font-mono text-xl font-semibold tabular-nums">{rows.length}</p>
           </CardContent>
         </Card>
         <Card>
@@ -100,11 +100,11 @@ export function NotificationsModule() {
             <CardTitle>Actions</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            <Button type="button" size="sm" onClick={() => void sendTest()}>
+            <Button type="button" size="xs" onClick={() => void sendTest()}>
               <Send className="h-3.5 w-3.5" />
               Send test email
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => void load()}>
+            <Button type="button" size="xs" variant="outline" onClick={() => void load()}>
               Refresh
             </Button>
             {message && <p className="text-xs text-sla-safe">{message}</p>}
@@ -114,7 +114,7 @@ export function NotificationsModule() {
       </div>
 
       <section className="rounded-lg border border-border bg-card">
-        <div className="flex items-center gap-2 border-b border-border p-4">
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
           <Mail className="h-4 w-4" />
           <div>
             <h2 className="text-sm font-semibold tracking-wide">Notification Log</h2>
@@ -137,7 +137,7 @@ export function NotificationsModule() {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-4 text-center text-xs text-muted-foreground">
                   Belum ada notifikasi. Kirim test atau trigger dari Ticketing.
                 </TableCell>
               </TableRow>

@@ -1,15 +1,14 @@
-import {
-  INTEGRATION_CLIENTS,
-  type IntegrationClient,
-  type IntegrationScope,
+import type {
+  IntegrationClient,
+  IntegrationScope,
 } from "@/config/integration.config";
+import { findIntegrationClientByApiKey } from "@/data/integration-clients-store";
 
 export function findClientByApiKey(raw: string | null): IntegrationClient | null {
   if (!raw) return null;
   const key = raw.trim();
   if (!key) return null;
-  const client = INTEGRATION_CLIENTS.find((c) => c.isActive && c.apiKey === key);
-  return client ?? null;
+  return findIntegrationClientByApiKey(key) ?? null;
 }
 
 /** Accept `Authorization: Bearer <key>` or `X-Api-Key: <key>`. */

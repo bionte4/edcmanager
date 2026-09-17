@@ -1,4 +1,5 @@
 import { MOCK_OPS_TICKETS } from "@/data/noc";
+import { listOlaPolicies } from "@/data/ola-store";
 import {
   createTicket,
   enrichOpsTicket,
@@ -174,7 +175,11 @@ export function addTicketEvent(
 }
 
 export function toIntegrationDto(ticket: OpsTicket, asOf = new Date()) {
-  const enriched = enrichOpsTicket(ticket, asOf);
+  const enriched = enrichOpsTicket(
+    ticket,
+    asOf,
+    listOlaPolicies({ activeOnly: true })
+  );
   return {
     id: enriched.id,
     ticketNumber: enriched.ticketNumber,
@@ -202,6 +207,29 @@ export function toIntegrationDto(ticket: OpsTicket, asOf = new Date()) {
       elapsed: enriched.elapsedLabel,
       deadlineAt: enriched.deadlineAt,
       needsEscalation: enriched.needsEscalation,
+    },
+    ola: {
+      needsEscalation: enriched.olaNeedsEscalation,
+      acknowledge: enriched.ola.acknowledge
+        ? {
+            status: enriched.ola.acknowledge.status,
+            policyId: enriched.ola.acknowledge.policyId,
+            policyName: enriched.ola.acknowledge.policyName,
+            limitMinutes: enriched.ola.acknowledge.limitMinutes,
+            deadlineAt: enriched.ola.acknowledge.deadlineAt.toISOString(),
+            remainingMs: enriched.ola.acknowledge.remainingMs,
+          }
+        : null,
+      dispatch: enriched.ola.dispatch
+        ? {
+            status: enriched.ola.dispatch.status,
+            policyId: enriched.ola.dispatch.policyId,
+            policyName: enriched.ola.dispatch.policyName,
+            limitMinutes: enriched.ola.dispatch.limitMinutes,
+            deadlineAt: enriched.ola.dispatch.deadlineAt.toISOString(),
+            remainingMs: enriched.ola.dispatch.remainingMs,
+          }
+        : null,
     },
     activities: enriched.activities.map((a) => ({
       type: a.type,

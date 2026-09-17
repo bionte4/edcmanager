@@ -78,22 +78,22 @@ export function DashboardAiBriefing({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="flex items-center gap-2 text-foreground">
-          <Brain className="h-4 w-4" />
+        <CardTitle className="flex items-center gap-1.5 text-foreground">
+          <Brain className="h-3.5 w-3.5" />
           AI Shift Briefing
         </CardTitle>
-        <Button type="button" size="sm" variant="outline" disabled={loading} onClick={() => void generate()}>
+        <Button type="button" size="xs" variant="outline" disabled={loading} onClick={() => void generate()}>
           {loading ? "Generating…" : "Generate"}
         </Button>
       </CardHeader>
       <CardContent>
         {!insight && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             Ringkasan prioritas NOC berdasarkan antrian aktif & risiko SLA.
           </p>
         )}
         {insight && (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Badge
               variant={
                 insight.riskLevel === "LOW"
@@ -105,15 +105,15 @@ export function DashboardAiBriefing({
             >
               Top risk {insight.riskScore} · {insight.riskLevel}
             </Badge>
-            <p className="text-sm">{insight.summary}</p>
-            <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+            <p className="text-xs">{insight.summary}</p>
+            <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-muted-foreground">
               {insight.recommendations.map((r) => (
                 <li key={r}>{r}</li>
               ))}
             </ul>
           </div>
         )}
-        {error && <p className="mt-2 text-xs text-sla-breached">{error}</p>}
+        {error && <p className="mt-1.5 text-[11px] text-sla-breached">{error}</p>}
       </CardContent>
     </Card>
   );

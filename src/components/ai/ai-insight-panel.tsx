@@ -102,7 +102,7 @@ export function AiInsightPanel({
         </div>
         <Button
           type="button"
-          size="sm"
+          size="xs"
           variant="outline"
           disabled={!ticket || loading}
           onClick={() => void generate()}
@@ -111,7 +111,7 @@ export function AiInsightPanel({
           Generate
         </Button>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-2">
         {!ticket && (
           <p className="text-xs text-muted-foreground">Pilih tiket untuk insight.</p>
         )}
@@ -138,7 +138,7 @@ export function AiInsightPanel({
         <div className="flex flex-wrap gap-1">
           <Button
             type="button"
-            size="sm"
+            size="xs"
             variant="outline"
             disabled={!ticket}
             onClick={() => void runNotify("assign")}
@@ -148,7 +148,7 @@ export function AiInsightPanel({
           </Button>
           <Button
             type="button"
-            size="sm"
+            size="xs"
             variant="outline"
             disabled={!ticket}
             onClick={() => void runNotify("warning")}
@@ -158,7 +158,7 @@ export function AiInsightPanel({
           </Button>
           <Button
             type="button"
-            size="sm"
+            size="xs"
             variant="outline"
             disabled={!ticket}
             onClick={() => void runNotify("breached")}

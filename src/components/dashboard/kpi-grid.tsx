@@ -34,8 +34,8 @@ function KpiCard({ title, value, hint, icon: Icon, tone = "neutral" }: KpiCardPr
         />
       </CardHeader>
       <CardContent>
-        <p className="font-mono text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+        <p className="font-mono text-xl font-semibold tracking-tight tabular-nums">{value}</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
       </CardContent>
     </Card>
   );
@@ -50,7 +50,7 @@ export function KpiGrid({ kpis }: { kpis: DashboardKpis }) {
         : "danger";
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
       <KpiCard
         title="Tiket Aktif"
         value={String(kpis.activeTickets)}

@@ -34,7 +34,7 @@ function VendorSummaryCard({ vendor }: { vendor: VendorMonthlyMetrics }) {
           {slaOk && uptimeOk ? "On Target" : "At Risk"}
         </Badge>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-3">
+      <CardContent className="grid grid-cols-2 gap-2">
         <Metric
           icon={ShieldCheck}
           label="SLA Compliance"
@@ -58,7 +58,7 @@ function VendorSummaryCard({ vendor }: { vendor: VendorMonthlyMetrics }) {
           value={formatPercent(vendor.uptimePercent)}
           tone={uptimeOk ? "ok" : "danger"}
         />
-        <div className="col-span-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
+        <div className="col-span-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-[11px]">
           <span className="text-muted-foreground">Alokasi / Deployed: </span>
           <span className="font-mono font-medium">
             {vendor.deployedUnits}/{vendor.allocationQuota}
@@ -85,11 +85,11 @@ function Metric({
   tone?: "neutral" | "ok" | "warn" | "danger";
 }) {
   return (
-    <div className="rounded-md border border-border p-2.5">
-      <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+    <div className="rounded-md border border-border p-2">
+      <div className="mb-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <Icon
           className={cn(
-            "h-3.5 w-3.5",
+            "h-3 w-3",
             tone === "ok" && "text-sla-safe",
             tone === "warn" && "text-sla-warning",
             tone === "danger" && "text-sla-breached"
@@ -97,7 +97,7 @@ function Metric({
         />
         {label}
       </div>
-      <p className="font-mono text-lg font-semibold tabular-nums tracking-tight">{value}</p>
+      <p className="font-mono text-base font-semibold tabular-nums tracking-tight">{value}</p>
     </div>
   );
 }
@@ -110,7 +110,7 @@ export function VendorEvaluationModule({
   const comparison = buildVendorComparison(vendors);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="grid gap-3 lg:grid-cols-2">
         {vendors.map((vendor) => (
           <VendorSummaryCard key={vendor.vendorId} vendor={vendor} />
@@ -118,7 +118,7 @@ export function VendorEvaluationModule({
       </div>
 
       <section className="rounded-lg border border-border bg-card">
-        <div className="border-b border-border p-4">
+        <div className="border-b border-border px-3 py-2">
           <h2 className="text-sm font-semibold tracking-wide">Vendor 1 vs Vendor 2</h2>
           <p className="text-xs text-muted-foreground">
             Perbandingan SLA compliance, kecepatan resolusi, dan kendala operasional bulanan

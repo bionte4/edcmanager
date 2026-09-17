@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authenticateUser } from "@/data/users-store";
+import { recordLoginAttendance } from "@/data/wfm-store";
 import { createSessionToken, SESSION_COOKIE } from "@/lib/auth/session";
 
 export async function POST(request: Request) {
@@ -23,8 +24,10 @@ export async function POST(request: Request) {
       );
     }
 
+    const attendance = recordLoginAttendance(user);
+
     const token = await createSessionToken(user);
-    const response = NextResponse.json({ user });
+    const response = NextResponse.json({ user, attendance });
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: "lax",

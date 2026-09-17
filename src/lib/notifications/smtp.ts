@@ -1,5 +1,9 @@
 import nodemailer from "nodemailer";
-import { SMTP_CONFIG, isSmtpConfigured } from "@/config/smtp.config";
+import {
+  getEmailSettings,
+  getSmtpSettings,
+  isSmtpConfigured,
+} from "@/data/connector-settings-store";
 
 export interface SendEmailInput {
   to: string;
@@ -18,6 +22,11 @@ export interface SendEmailResult {
  * Send email via SMTP when configured; otherwise simulate (log-only) for demo.
  */
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
+  const email = getEmailSettings();
+  if (!email.enabled) {
+    return { mode: "failed", error: "Email notifications disabled" };
+  }
+
   if (!isSmtpConfigured()) {
     console.info("[smtp:simulated]", {
       to: input.to,
@@ -27,19 +36,21 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     return { mode: "simulated", messageId: `sim-${Date.now()}` };
   }
 
+  const cfg = getSmtpSettings();
+
   try {
     const transporter = nodemailer.createTransport({
-      host: SMTP_CONFIG.host,
-      port: SMTP_CONFIG.port,
-      secure: SMTP_CONFIG.secure,
+      host: cfg.host,
+      port: cfg.port,
+      secure: cfg.secure,
       auth: {
-        user: SMTP_CONFIG.user,
-        pass: SMTP_CONFIG.pass,
+        user: cfg.user,
+        pass: cfg.pass,
       },
     });
 
     const info = await transporter.sendMail({
-      from: SMTP_CONFIG.from,
+      from: email.from,
       to: input.to,
       subject: input.subject,
       text: input.text,
@@ -51,6 +62,45 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     const error = e instanceof Error ? e.message : "SMTP send failed";
     console.error("[smtp:failed]", error);
     return { mode: "failed", error };
+  }
+}
+
+/** Verify SMTP credentials / reachability without sending mail when possible. */
+export async function testSmtpConnection(): Promise<{
+  ok: boolean;
+  mode: "live" | "simulated";
+  message: string;
+}> {
+  if (!isSmtpConfigured()) {
+    return {
+      ok: true,
+      mode: "simulated",
+      message: "SMTP belum diisi — mode simulated OK (isi host/user/pass untuk live test).",
+    };
+  }
+
+  const cfg = getSmtpSettings();
+  try {
+    const transporter = nodemailer.createTransport({
+      host: cfg.host,
+      port: cfg.port,
+      secure: cfg.secure,
+      auth: { user: cfg.user, pass: cfg.pass },
+      connectionTimeout: 8_000,
+      greetingTimeout: 8_000,
+    });
+    await transporter.verify();
+    return {
+      ok: true,
+      mode: "live",
+      message: `SMTP verify OK · ${cfg.host}:${cfg.port}`,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      mode: "live",
+      message: e instanceof Error ? e.message : "SMTP verify gagal",
+    };
   }
 }
 

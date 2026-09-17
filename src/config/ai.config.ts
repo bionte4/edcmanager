@@ -1,14 +1,33 @@
 /**
- * AI Insight configuration — heuristic always on; LLM optional via API key.
+ * AI Insight configuration — runtime values via connector-settings-store.
  */
+
+import {
+  getAiSettings,
+  isLlmConfigured as storeIsLlmConfigured,
+} from "@/data/connector-settings-store";
+
+export { AI_MODEL_PRESETS } from "@/config/ai-models";
+
+/** @deprecated Prefer getAiSettings() — kept for compatibility. */
 export const AI_CONFIG = {
-  enabled: process.env.AI_INSIGHTS_ENABLED !== "false",
-  provider: process.env.AI_PROVIDER ?? "heuristic",
-  apiKey: process.env.AI_API_KEY ?? process.env.OPENAI_API_KEY ?? "",
-  model: process.env.AI_MODEL ?? "gpt-4o-mini",
-  endpoint: process.env.AI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions",
-} as const;
+  get enabled() {
+    return getAiSettings().enabled;
+  },
+  get provider() {
+    return getAiSettings().provider;
+  },
+  get apiKey() {
+    return getAiSettings().apiKey;
+  },
+  get model() {
+    return getAiSettings().model;
+  },
+  get endpoint() {
+    return getAiSettings().endpoint;
+  },
+};
 
 export function isLlmConfigured(): boolean {
-  return Boolean(AI_CONFIG.apiKey);
+  return storeIsLlmConfigured();
 }

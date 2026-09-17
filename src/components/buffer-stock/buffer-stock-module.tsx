@@ -60,14 +60,14 @@ export function BufferStockModule({ initialRows }: { initialRows: BufferStockRow
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-1">
             <CardTitle>Threshold Buffer</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="font-mono text-2xl font-semibold tabular-nums">
+            <p className="font-mono text-xl font-semibold tabular-nums">
               {BUFFER_STOCK_MIN_PERCENT}%
             </p>
             <p className="mt-1 text-xs text-muted-foreground">Minimum per Regional Office</p>
@@ -80,7 +80,7 @@ export function BufferStockModule({ initialRows }: { initialRows: BufferStockRow
           <CardContent>
             <p
               className={cn(
-                "font-mono text-2xl font-semibold tabular-nums",
+                "font-mono text-xl font-semibold tabular-nums",
                 deficitCount > 0 ? "text-sla-breached" : "text-sla-safe"
               )}
             >
@@ -94,7 +94,7 @@ export function BufferStockModule({ initialRows }: { initialRows: BufferStockRow
             <CardTitle>Total Unit Buffer</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="font-mono text-2xl font-semibold tabular-nums">
+            <p className="font-mono text-xl font-semibold tabular-nums">
               {rows.reduce((sum, r) => sum + r.bufferUnits, 0)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">Across all RO</p>
@@ -103,7 +103,7 @@ export function BufferStockModule({ initialRows }: { initialRows: BufferStockRow
       </div>
 
       <section className="rounded-lg border border-border bg-card">
-        <div className="border-b border-border p-4">
+        <div className="border-b border-border px-3 py-2">
           <h2 className="text-sm font-semibold tracking-wide">Distribusi Buffer Stock per RO</h2>
           <p className="text-xs text-muted-foreground">
             Status dihitung dari config inventory (min {BUFFER_STOCK_MIN_PERCENT}%)

@@ -58,21 +58,21 @@ export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
   }, [tickets, location, category]);
 
   return (
-    <section className="rounded-lg border border-border bg-card">
-      <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="rounded-md border border-border bg-card">
+      <div className="flex flex-col gap-2 border-b border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold tracking-wide">Tiket Operasional (ITSM)</h2>
-          <p className="text-xs text-muted-foreground">
+          <h2 className="text-xs font-semibold tracking-wide">Tiket Operasional (ITSM)</h2>
+          <p className="text-[11px] text-muted-foreground">
             Default Incident/CM · filter lokasi & kategori · badge SLA
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+        <div className="flex flex-wrap items-center gap-1">
+          <Filter className="h-3 w-3 text-muted-foreground" />
           {LOCATIONS.map((value) => (
             <Button
               key={value}
               type="button"
-              size="sm"
+              size="xs"
               variant={location === value ? "default" : "outline"}
               onClick={() => setLocation(value)}
             >
@@ -84,7 +84,7 @@ export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
             <Button
               key={value}
               type="button"
-              size="sm"
+              size="xs"
               variant={category === value ? "default" : "outline"}
               onClick={() => setCategory(value)}
             >
@@ -111,7 +111,7 @@ export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
         <TableBody>
           {filtered.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
+              <TableCell colSpan={9} className="py-4 text-center text-xs text-muted-foreground">
                 Tidak ada tiket untuk filter ini.
               </TableCell>
             </TableRow>

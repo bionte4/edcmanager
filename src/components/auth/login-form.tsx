@@ -6,12 +6,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/components/auth/auth-provider";
 import { DEMO_PASSWORD } from "@/config/rbac.config";
 
 export function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
   const next = search.get("next") || "/";
+  const { refresh } = useAuth();
 
   const [email, setEmail] = useState("admin@edc.local");
   const [password, setPassword] = useState(DEMO_PASSWORD);
@@ -28,11 +30,30 @@ export function LoginForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as {
+        error?: string;
+        attendance?: {
+          status: string;
+          note?: string | null;
+          shiftType?: string | null;
+        } | null;
+      };
       if (!res.ok) {
         setError(data.error || "Login gagal");
         return;
       }
+      if (data.attendance) {
+        try {
+          sessionStorage.setItem(
+            "edc_login_attendance",
+            JSON.stringify(data.attendance)
+          );
+        } catch {
+          // ignore
+        }
+      }
+      // Reload auth context so nav permissions appear after cookie is set.
+      await refresh();
       router.replace(next);
       router.refresh();
     } catch {
@@ -45,9 +66,9 @@ export function LoginForm() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-3">
+        <CardHeader className="space-y-2">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background">
               <Radio className="h-5 w-5 text-primary" />
             </div>
             <div>
@@ -88,7 +109,8 @@ export function LoginForm() {
               Demo: <span className="font-mono">admin@edc.local</span> /{" "}
               <span className="font-mono">{DEMO_PASSWORD}</span>
               <br />
-              Role lain: andi.noc@edc.local, dewi.supervisor@edc.local, rudi.ops@edc.local (password sama)
+              Role lain: andi.noc@edc.local · dewi.supervisor@edc.local · rudi.ops@edc.local ·
+              eko.tech@edc.local (password sama)
             </p>
           </form>
         </CardContent>

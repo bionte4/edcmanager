@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Headset, UserCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,13 +13,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAuth } from "@/components/auth/auth-provider";
 import { NOC_SHIFT_WINDOWS, type NocShiftType } from "@/config/noc.config";
-import {
-  MOCK_NOC_SHIFTS,
-  MOCK_USERS,
-  ROLE_LABELS,
-  SHIFT_STATUS_LABELS,
-} from "@/data/noc";
+import { ROLE_LABELS, SHIFT_STATUS_LABELS } from "@/data/noc";
 import type { NocShiftRow, ShiftDutyStatus } from "@/lib/ticketing";
 import { cn } from "@/lib/utils";
 
@@ -30,8 +26,31 @@ function dutyBadge(status: ShiftDutyStatus): "safe" | "warning" | "secondary" {
 }
 
 export function NocRosterModule() {
-  const [shifts, setShifts] = useState(MOCK_NOC_SHIFTS);
+  const { can } = useAuth();
+  const canManage = can("noc:manage_shift");
+  const [shifts, setShifts] = useState<NocShiftRow[]>([]);
   const [filter, setFilter] = useState<NocShiftType | "ALL">("ALL");
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+    const res = await fetch("/api/wfm", { cache: "no-store" });
+    const data = (await res.json()) as { shifts?: NocShiftRow[]; error?: string };
+    if (!res.ok) {
+      // Fallback: user may have noc:read but not wfm:read
+      if (res.status === 403) {
+        setError("Roster terhubung ke WFM — minta akses wfm:read atau buka menu WFM.");
+      } else {
+        setError(data.error || "Gagal memuat roster");
+      }
+      return;
+    }
+    setShifts(data.shifts ?? []);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const onDuty = useMemo(
     () => shifts.filter((s) => s.status === "ON_DUTY"),
@@ -43,33 +62,42 @@ export function NocRosterModule() {
     [shifts, filter]
   );
 
-  function setDuty(shift: NocShiftRow, status: ShiftDutyStatus) {
+  async function setDuty(shift: NocShiftRow, status: ShiftDutyStatus) {
+    if (!canManage) return;
+    const res = await fetch("/api/wfm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_duty", shiftId: shift.id, status }),
+    });
+    const data = (await res.json()) as { error?: string; shift?: NocShiftRow };
+    if (!res.ok) {
+      setError(data.error || "Gagal update duty");
+      return;
+    }
     setShifts((prev) =>
       prev.map((s) => (s.id === shift.id ? { ...s, status } : s))
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-1">
             <CardTitle>On Duty Sekarang</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="font-mono text-2xl font-semibold tabular-nums">{onDuty.length}</p>
-            <p className="mt-1 text-xs text-muted-foreground">NOC + Supervisor standby</p>
+            <p className="font-mono text-xl font-semibold tabular-nums">{onDuty.length}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Dari roster WFM (login auto-hadir)</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-1">
-            <CardTitle>Personil Aktif</CardTitle>
+            <CardTitle>Baris Roster</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="font-mono text-2xl font-semibold tabular-nums">
-              {MOCK_USERS.filter((u) => u.isActive).length}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">Terdaftar di sistem</p>
+            <p className="font-mono text-xl font-semibold tabular-nums">{shifts.length}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Termasuk roster hari ini</p>
           </CardContent>
         </Card>
         <Card>
@@ -91,27 +119,37 @@ export function NocRosterModule() {
         </Card>
       </div>
 
-      <section className="rounded-lg border border-border bg-card">
-        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+      {error && <p className="text-xs text-sla-breached">{error}</p>}
+
+      <section className="rounded-md border border-border bg-card">
+        <div className="flex flex-col gap-2 border-b border-border px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-semibold tracking-wide">
               <Headset className="h-4 w-4" />
-              Roster Standby NOC
+              Roster Standby NOC / L1
             </h2>
-            <p className="text-xs text-muted-foreground">
-              Tandai On Duty / Off Duty untuk handover shift
+            <p className="text-[11px] text-muted-foreground">
+              Sumber data sama dengan modul WFM · tukar shift via /wfm
             </p>
           </div>
           <div className="flex flex-wrap gap-1">
-            {(["ALL", "MORNING", "AFTERNOON", "NIGHT"] as const).map((value) => (
+            <Button
+              type="button"
+              size="xs"
+              variant={filter === "ALL" ? "default" : "outline"}
+              onClick={() => setFilter("ALL")}
+            >
+              Semua
+            </Button>
+            {(Object.keys(NOC_SHIFT_WINDOWS) as NocShiftType[]).map((key) => (
               <Button
-                key={value}
+                key={key}
                 type="button"
-                size="sm"
-                variant={filter === value ? "default" : "outline"}
-                onClick={() => setFilter(value)}
+                size="xs"
+                variant={filter === key ? "default" : "outline"}
+                onClick={() => setFilter(key)}
               >
-                {value === "ALL" ? "Semua" : NOC_SHIFT_WINDOWS[value].label}
+                {NOC_SHIFT_WINDOWS[key].label}
               </Button>
             ))}
           </div>
@@ -122,85 +160,55 @@ export function NocRosterModule() {
             <TableRow>
               <TableHead>Nama</TableHead>
               <TableHead>Role</TableHead>
-              <TableHead>Shift</TableHead>
               <TableHead>Tanggal</TableHead>
+              <TableHead>Shift</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Catatan</TableHead>
-              <TableHead>Aksi</TableHead>
+              <TableHead className="text-right">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.map((shift) => (
               <TableRow key={shift.id}>
-                <TableCell className="font-medium">{shift.userName}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{ROLE_LABELS[shift.role]}</Badge>
+                <TableCell className="text-xs font-medium">{shift.userName}</TableCell>
+                <TableCell className="text-[11px]">
+                  {ROLE_LABELS[shift.role] ?? shift.role}
                 </TableCell>
-                <TableCell>{NOC_SHIFT_WINDOWS[shift.shiftType].label}</TableCell>
-                <TableCell className="font-mono text-xs">{shift.shiftDate}</TableCell>
+                <TableCell className="font-mono text-[11px]">{shift.shiftDate}</TableCell>
+                <TableCell className="text-xs">
+                  {NOC_SHIFT_WINDOWS[shift.shiftType].label}
+                </TableCell>
                 <TableCell>
                   <Badge variant={dutyBadge(shift.status)}>
                     {SHIFT_STATUS_LABELS[shift.status]}
                   </Badge>
                 </TableCell>
-                <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
+                <TableCell className="text-[11px] text-muted-foreground">
                   {shift.notes || "—"}
                 </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className={cn(shift.status === "ON_DUTY" && "border-sla-safe text-sla-safe")}
-                      onClick={() => setDuty(shift, "ON_DUTY")}
-                    >
-                      <UserCheck className="h-3.5 w-3.5" />
-                      On Duty
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setDuty(shift, "OFF_DUTY")}
-                    >
-                      Off
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </section>
-
-      <section className="rounded-lg border border-border bg-card">
-        <div className="border-b border-border p-4">
-          <h2 className="text-sm font-semibold tracking-wide">Directory Personil</h2>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nama</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Telepon</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {MOCK_USERS.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell className="font-medium">{user.name}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{ROLE_LABELS[user.role]}</Badge>
-                </TableCell>
-                <TableCell className="font-mono text-xs">{user.email}</TableCell>
-                <TableCell className="font-mono text-xs">{user.phone || "—"}</TableCell>
-                <TableCell>
-                  <Badge variant={user.isActive ? "safe" : "secondary"}>
-                    {user.isActive ? "Aktif" : "Nonaktif"}
-                  </Badge>
+                <TableCell className="text-right">
+                  {canManage && (
+                    <div className="inline-flex gap-1">
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant={shift.status === "ON_DUTY" ? "default" : "outline"}
+                        className={cn(shift.status === "ON_DUTY" && "pointer-events-none")}
+                        onClick={() => void setDuty(shift, "ON_DUTY")}
+                      >
+                        <UserCheck className="h-3 w-3" />
+                        On
+                      </Button>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        onClick={() => void setDuty(shift, "OFF_DUTY")}
+                      >
+                        Off
+                      </Button>
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

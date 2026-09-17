@@ -47,22 +47,67 @@ npm run db:generate
 npm run db:push
 ```
 
-## Menjalankan aplikasi
+## Menjalankan dengan Docker
+
+Prasyarat: Docker Desktop / Docker Engine + Compose v2.
 
 ```bash
+cd edcmanager
+cp .env.docker.example .env   # opsional — override AUTH_SECRET / SMTP / AI
+docker compose up --build -d
+```
+
+- App: http://localhost:3000  
+- Postgres: `localhost:5432` (user/pass/db: `postgres` / `postgres` / `edcmanager`)
+
+```bash
+docker compose logs -f app   # log aplikasi
+docker compose down          # stop
+docker compose down -v       # stop + hapus volume DB
+```
+
+Stack: service `app` (Next.js standalone) + `db` (PostgreSQL 16). Entrypoint menjalankan `prisma db push` bila `DATABASE_URL` tersedia; UI demo tetap jalan dengan mock data.
+
+## Menjalankan di laptop (manual / tanpa Docker)
+
+Jalankan langsung dengan Node.js:
+
+```bash
+# 1. Prasyarat: Node.js 20+
+node -v
+
+# 2. Install dependency
+cd edcmanager
+npm install
+
+# 3. Env (opsional untuk demo UI — mock data tidak wajib DB)
+cp .env.example .env
+# Edit AUTH_SECRET jika perlu. DATABASE_URL hanya jika pakai Prisma/DB.
+
+# 4. (Opsional) Prisma client
+npm run db:generate
+
+# 5. Dev server
 npm run dev
 ```
 
-Buka [http://localhost:3000](http://localhost:3000) — akan diarahkan ke `/login`.
+Buka http://localhost:3000 → halaman login.
 
-### Demo login
+| Email | Password |
+|--------|----------|
+| `admin@edc.local` | `edc123` |
+| `andi.noc@edc.local` | `edc123` |
+| `dewi.supervisor@edc.local` | `edc123` |
+| `rudi.ops@edc.local` | `edc123` |
 
-| Email | Role | Password |
-|--------|------|----------|
-| `admin@edc.local` | Administrator | `edc123` |
-| `andi.noc@edc.local` | NOC | `edc123` |
-| `dewi.supervisor@edc.local` | Supervisor | `edc123` |
-| `rudi.ops@edc.local` | Ops Manager | `edc123` |
+Production lokal (tanpa Docker):
+
+```bash
+npm run build
+npm run start
+```
+
+PostgreSQL hanya diperlukan jika Anda ingin `db:push` / Prisma Studio. **Demo UI saat ini memakai mock data in-memory** dan bisa jalan tanpa DB.
 
 | Route | Halaman |
 |--------|---------|

@@ -1,12 +1,15 @@
 /**
- * Machine-to-machine API keys for external ticketing / ITSM integrations.
- * Rotate keys in production; prefer DB-backed secrets later.
+ * Integration scopes & seed clients.
+ * Mutable client list lives in `data/integration-clients-store.ts`.
  */
 
-export type IntegrationScope =
-  | "tickets:read"
-  | "tickets:write"
-  | "tickets:events";
+export const INTEGRATION_SCOPES = [
+  "tickets:read",
+  "tickets:write",
+  "tickets:events",
+] as const;
+
+export type IntegrationScope = (typeof INTEGRATION_SCOPES)[number];
 
 export interface IntegrationClient {
   id: string;
@@ -15,12 +18,17 @@ export interface IntegrationClient {
   keyId: string;
   /** Secret presented as Bearer / X-Api-Key */
   apiKey: string;
-  scopes: readonly IntegrationScope[];
+  scopes: IntegrationScope[];
   isActive: boolean;
   externalSystem: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export const INTEGRATION_CLIENTS: IntegrationClient[] = [
+export const INTEGRATION_CLIENT_SEED: Omit<
+  IntegrationClient,
+  "createdAt" | "updatedAt"
+>[] = [
   {
     id: "int-servicedesk",
     name: "External Service Desk",

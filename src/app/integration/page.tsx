@@ -1,13 +1,13 @@
 import { AppShell } from "@/components/layout/app-shell";
-import { IntegrationDocs } from "@/components/integration/integration-docs";
+import { IntegrationHub } from "@/components/integration/integration-hub";
 
 export default function IntegrationPage() {
   return (
     <AppShell
-      title="Integration API v1"
-      description="REST API untuk menghubungkan ticketing / ITSM eksternal (API key + ITSM types)."
+      title="System Integration"
+      description="Kartu Email, SMTP, AI Insight, dan REST API — edit, test, plus CRUD API clients."
     >
-      <IntegrationDocs />
+      <IntegrationHub />
     </AppShell>
   );
 }

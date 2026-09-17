@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/session";
 import { can } from "@/lib/rbac";
-import type { AppRole } from "@/config/rbac.config";
+import { ROUTE_PERMISSIONS, type AppRole } from "@/config/rbac.config";
 
 const PUBLIC_PATHS = [
   "/login",
@@ -17,6 +17,20 @@ export async function middleware(request: NextRequest) {
   const session = token ? await verifySessionToken(token) : null;
 
   if (pathname === "/login" && session) {
+    // Allow landing on login after explicit logout even if a stale cookie remains briefly.
+    if (request.nextUrl.searchParams.get("loggedOut") === "1") {
+      const res = NextResponse.next();
+      res.cookies.set(SESSION_COOKIE, "", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 0,
+        expires: new Date(0),
+      });
+      res.cookies.delete(SESSION_COOKIE);
+      return res;
+    }
     const home = request.nextUrl.clone();
     home.pathname = "/";
     home.search = "";
@@ -49,10 +63,11 @@ export async function middleware(request: NextRequest) {
     isActive: true,
   };
 
-  if (
-    (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) &&
-    !can(user, "admin:access")
-  ) {
+  const routeRule = ROUTE_PERMISSIONS.find(
+    (r) => pathname === r.prefix || pathname.startsWith(`${r.prefix}/`)
+  );
+
+  if (routeRule && !can(user, routeRule.permission)) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }

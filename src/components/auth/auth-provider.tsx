@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { usePathname } from "next/navigation";
 import type { Permission } from "@/config/rbac.config";
 import type { AuthUser } from "@/lib/rbac";
 import { can as rbacCan } from "@/lib/rbac";
@@ -24,6 +25,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,18 +54,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, pathname]);
 
   const logout = useCallback(async () => {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch {
-      // Server may be down — still clear local session and redirect.
-    } finally {
-      setUser(null);
-      setPermissions([]);
-      window.location.href = "/login";
-    }
+    setUser(null);
+    setPermissions([]);
+    // Full navigation clears cookie server-side (more reliable than fetch-only).
+    window.location.assign("/api/auth/logout");
   }, []);
 
   const value = useMemo<AuthContextValue>(
@@ -73,7 +70,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       refresh,
       logout,
-      can: (permission) => rbacCan(user, permission),
+      can: (permission) => {
+        if (permissions.length > 0) return permissions.includes(permission);
+        return rbacCan(user, permission);
+      },
     }),
     [user, permissions, loading, refresh, logout]
   );

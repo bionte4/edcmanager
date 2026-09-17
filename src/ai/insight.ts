@@ -1,4 +1,5 @@
 import { AI_CONFIG, isLlmConfigured } from "@/config/ai.config";
+import { getAiSettings } from "@/data/connector-settings-store";
 import type { ItsmType } from "@/config/itsm.config";
 
 export interface InsightTicketInput {
@@ -116,15 +117,17 @@ function heuristicInsight(ticket: InsightTicketInput): AiInsightResult {
 async function llmPolish(base: AiInsightResult, ticket: InsightTicketInput): Promise<AiInsightResult> {
   if (!isLlmConfigured()) return base;
 
+  const cfg = getAiSettings();
+
   try {
-    const res = await fetch(AI_CONFIG.endpoint, {
+    const res = await fetch(cfg.endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${AI_CONFIG.apiKey}`,
+        Authorization: `Bearer ${cfg.apiKey}`,
       },
       body: JSON.stringify({
-        model: AI_CONFIG.model,
+        model: cfg.model,
         temperature: 0.2,
         messages: [
           {
