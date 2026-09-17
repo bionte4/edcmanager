@@ -17,6 +17,7 @@ export type {
 
 export type {
   TicketSlaInput,
+  SlaPauseInterval,
   ResolutionDuration,
   SlaLimitResult,
   SlaEvaluation,
@@ -37,14 +38,15 @@ export {
 export { evaluateSlaStatus, isApproachingBreach } from "./flagging";
 
 export {
+  totalPausedMs,
+  isClockStopped,
+  openPauseInterval,
+} from "./pause";
+
+export {
   generateMonthlyUptimeReport,
   sumDowntimeMinutes,
   buildMonthlyUptimeFromTickets,
 } from "./uptime";
 
-export {
-  getCategoryLabel,
-  getCategorySlaProfile,
-  getLocationLabel,
-  getLocationSlaZone,
-};
+export { getCategoryLabel, getCategorySlaProfile, getLocationLabel, getLocationSlaZone };

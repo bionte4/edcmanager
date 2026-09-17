@@ -38,8 +38,14 @@ import {
 } from "@/lib/ticketing";
 import { AiInsightPanel } from "@/components/ai/ai-insight-panel";
 import type { TicketCategory, TicketLocation } from "@/config/sla.config";
+import {
+  SLA_PAUSE_REASON_CODES,
+  SLA_PAUSE_REASON_LABELS,
+  type SlaPauseReasonCode,
+} from "@/config/sla-pause.config";
 import { formatDateTime } from "@/lib/utils";
 import { OLA_STATUS_LABELS, type OlaPolicy } from "@/ola";
+import Link from "next/link";
 
 const FALLBACK_USERS: NocUser[] = [
   {
@@ -81,7 +87,8 @@ const ITSM_FILTERS: Array<ItsmType | "ALL"> = [
 ];
 
 export function TicketingModule() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
+  const canPause = can("ticket:sla_pause");
   const [tickets, setTickets] = useState<OpsTicket[]>([]);
   const [olaPolicies, setOlaPolicies] = useState<OlaPolicy[] | null>(null);
   const [categories, setCategories] = useState<
@@ -118,6 +125,10 @@ export function TicketingModule() {
   const [technicianName, setTechnicianName] = useState("");
   const [assignToId, setAssignToId] = useState("u-noc-1");
   const [linkProblemId, setLinkProblemId] = useState("");
+  const [pauseReason, setPauseReason] =
+    useState<SlaPauseReasonCode>("MERCHANT_ACCESS");
+  const [pauseNote, setPauseNote] = useState("");
+  const [clockBusy, setClockBusy] = useState(false);
 
   const loadTickets = useCallback(async () => {
     try {
@@ -272,6 +283,49 @@ export function TicketingModule() {
     return actor;
   }
 
+  async function handleSlaClock(action: "pause" | "resume") {
+    if (!selected || !canPause) return;
+    setClockBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(
+        `/api/tickets/${encodeURIComponent(selected.id)}/sla-clock`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            action === "pause"
+              ? {
+                  action: "pause",
+                  reasonCode: pauseReason,
+                  reasonNote: pauseNote || undefined,
+                }
+              : { action: "resume", note: pauseNote || undefined }
+          ),
+        }
+      );
+      const data = (await res.json()) as { ticket?: OpsTicket; error?: string };
+      if (!res.ok) {
+        setError(data.error || "Gagal update SLA clock");
+        return;
+      }
+      if (data.ticket) {
+        setTickets((prev) =>
+          prev.map((t) => (t.id === data.ticket!.id ? data.ticket! : t))
+        );
+      } else {
+        await loadTickets();
+      }
+      setMessage(
+        action === "pause" ? "SLA clock di-stop." : "SLA clock dilanjutkan."
+      );
+      setPauseNote("");
+    } finally {
+      setClockBusy(false);
+    }
+  }
+
   function handleCreate() {
     withFeedback(() => {
       const ticket = createTicket({
@@ -360,6 +414,12 @@ export function TicketingModule() {
         <Kpi title="Aktif" value={String(openCount)} />
         <Kpi title="Eskalasi SLA" value={String(escalateCount)} tone="warn" />
         <Kpi title="Eskalasi OLA" value={String(olaEscalateCount)} tone="warn" />
+        <Link
+          href="/ops/near-breach"
+          className="rounded-md border border-sla-warning/30 bg-sla-warning/5 px-3 py-2 text-[11px] text-muted-foreground hover:bg-sla-warning/10"
+        >
+          Antrian near-breach 16:00 →
+        </Link>
         <Kpi title="Incident" value={String(counts.INCIDENT)} />
         <Kpi title="Req / PRB / CHG" value={`${counts.REQUEST}/${counts.PROBLEM}/${counts.CHANGE}`} />
         <Kpi title="Total" value={String(tickets.length)} />
@@ -722,6 +782,10 @@ export function TicketingModule() {
             <p className="mt-1 text-xs text-muted-foreground">{selected.description}</p>
             <p className="mt-1 font-mono text-[11px] text-muted-foreground">
               Masuk {formatDateTime(selected.openedAt)} · elapsed {selected.elapsedLabel}
+              {selected.clockStopped ? " · CLOCK STOPPED" : ""}
+              {selected.pausedMs > 0
+                ? ` · pause ${Math.round(selected.pausedMs / 60000)}m`
+                : ""}
               {selected.ola.acknowledge
                 ? ` · OLA Ack ${OLA_STATUS_LABELS[selected.ola.acknowledge.status]} (${selected.olaAckLabel})`
                 : ""}
@@ -729,6 +793,54 @@ export function TicketingModule() {
                 ? ` · OLA Disp ${OLA_STATUS_LABELS[selected.ola.dispatch.status]} (${selected.olaDispatchLabel})`
                 : ""}
             </p>
+            {canPause &&
+              selected.status !== "CLOSED" &&
+              selected.status !== "RESOLVED" && (
+                <div className="mt-2 flex flex-wrap items-end gap-2">
+                  {!selected.clockStopped && (
+                    <select
+                      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                      value={pauseReason}
+                      onChange={(e) =>
+                        setPauseReason(e.target.value as SlaPauseReasonCode)
+                      }
+                    >
+                      {SLA_PAUSE_REASON_CODES.map((c) => (
+                        <option key={c} value={c}>
+                          {SLA_PAUSE_REASON_LABELS[c]}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <input
+                    className="h-8 min-w-[160px] flex-1 rounded-md border border-input bg-background px-2 text-xs"
+                    value={pauseNote}
+                    onChange={(e) => setPauseNote(e.target.value)}
+                    placeholder="Catatan clock-stop / resume"
+                  />
+                  {selected.clockStopped ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={clockBusy}
+                      onClick={() => void handleSlaClock("resume")}
+                    >
+                      Resume clock
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={clockBusy}
+                      onClick={() => void handleSlaClock("pause")}
+                    >
+                      Clock-stop
+                    </Button>
+                  )}
+                </div>
+              )}
           </div>
           <ul className="divide-y divide-border">
             {selected.activities.map((activity) => (

@@ -6,6 +6,7 @@ import {
 } from "@/sla";
 import { BUFFER_STOCK_MIN_PERCENT } from "@/config/inventory.config";
 import { UPTIME_TARGET_PERCENT } from "@/config/sla.config";
+import { DEFAULT_LOCATIONS } from "@/config/location.config";
 
 export type { TicketCategory, TicketLocation, SlaEvaluationStatus };
 
@@ -212,22 +213,9 @@ export function buildDashboardKpis(
   };
 }
 
-export const LOCATION_LABELS: Record<string, string> = {
-  DALAM_KOTA: "Dalam Kota",
-  LUAR_KOTA: "Luar Kota",
-  LUAR_PULAU: "Luar Pulau",
-  JKT_PUSAT: "Jakarta Pusat",
-  JKT_SELATAN: "Jakarta Selatan",
-  JKT_BARAT: "Jakarta Barat",
-  JKT_UTARA: "Jakarta Utara",
-  JKT_TIMUR: "Jakarta Timur",
-  BDG_KOTA: "Bandung Kota",
-  BDG_CIMAHI: "Cimahi",
-  SBY_PUSAT: "Surabaya Pusat",
-  SBY_BARAT: "Surabaya Barat",
-  DPS_BALI: "Denpasar Bali",
-  BTB_BALI: "Badung / Kuta",
-};
+export const LOCATION_LABELS: Record<string, string> = Object.fromEntries(
+  DEFAULT_LOCATIONS.map((l) => [l.code, l.label])
+);
 
 export const CATEGORY_LABELS: Record<string, string> = {
   VIP: "VIP",

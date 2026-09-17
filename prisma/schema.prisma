@@ -112,6 +112,8 @@ enum TicketActivityType {
   RESOLVED
   CLOSED
   HANDOVER
+  CLOCK_STOPPED
+  CLOCK_RESUMED
 }
 
 // ─── User (NOC / Supervisor / Tech) ──────────────────────────────────────────
@@ -136,6 +138,8 @@ model User {
   ticketsCreated      Ticket[]         @relation("TicketCreatedBy")
   activitiesPerformed TicketActivity[]
   auditLogs           AuditLog[]
+  slaPausesStarted    SlaPauseInterval[] @relation("SlaPauseStartedBy")
+  slaPausesEnded      SlaPauseInterval[] @relation("SlaPauseEndedBy")
 
   @@index([role])
   @@index([isActive])
@@ -320,6 +324,7 @@ model Ticket {
   relatedChange  Ticket?           @relation("TicketToChange", fields: [relatedChangeId], references: [id])
   linkedFrom     Ticket[]          @relation("TicketToChange")
   activities     TicketActivity[]
+  slaPauses      SlaPauseInterval[]
 
   @@unique([externalSystem, externalTicketId])
   @@index([vendorId])
@@ -360,6 +365,29 @@ model TicketActivity {
   @@index([createdAt])
   @@index([activityType])
   @@map("ticket_activities")
+}
+
+/// Contractual SLA clock-stop windows (BRI-coordinated holds).
+model SlaPauseInterval {
+  id          String    @id @default(cuid())
+  ticketId    String
+  reasonCode  String
+  reasonNote  String?
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  startedById String?
+  endedById   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  ticket    Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  startedBy User?  @relation("SlaPauseStartedBy", fields: [startedById], references: [id])
+  endedBy   User?  @relation("SlaPauseEndedBy", fields: [endedById], references: [id])
+
+  @@index([ticketId])
+  @@index([ticketId, endedAt])
+  @@index([startedAt])
+  @@map("sla_pause_intervals")
 }
 
 // ─── Metric Log ──────────────────────────────────────────────────────────────

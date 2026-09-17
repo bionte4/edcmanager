@@ -155,7 +155,7 @@ export function LocationsModule() {
     if (!canManage) return;
     if (
       !window.confirm(
-        "Reset semua lokasi ke default (3 zona + contoh kota)?"
+        "Reset semua lokasi ke default Level A (12 RO · kota prioritas nasional)?"
       )
     ) {
       return;
@@ -193,9 +193,9 @@ export function LocationsModule() {
       )}
 
       <p className="text-xs text-muted-foreground">
-        <strong>Site operasional</strong> (kota/area + RO) dipilih di form tiket.
-        Alias zona (DALAM_KOTA / …) hanya untuk OLA/legacy — tidak muncul di picker
-        tiket. Matrix SLA tetap keyed by zona Dalam/Luar kota/pulau.
+        <strong>Site operasional</strong> (kota/kab prioritas per RO — skala Level
+        A Indonesia). Alias zona hanya untuk OLA/legacy. Matrix SLA keyed by
+        Dalam/Luar kota/pulau relatif ke RO.
       </p>
 
       {canManage && (

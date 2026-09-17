@@ -13,6 +13,7 @@ import {
 } from "@/config/executive.config";
 import { BUFFER_STOCK_MIN_PERCENT } from "@/config/inventory.config";
 import { UPTIME_TARGET_PERCENT } from "@/config/sla.config";
+import { prisma } from "@/lib/prisma";
 
 export interface MonthlyTrendPoint {
   monthLabel: string;
@@ -72,32 +73,105 @@ function penaltyRisk(opts: {
   return "LOW";
 }
 
-/** Synthetic 6-month trend seeded from current vendor metrics (demo). */
-function buildTrend(vendors: VendorMonthlyMetrics[]): MonthlyTrendPoint[] {
-  const avgSla =
-    vendors.reduce((s, v) => s + v.slaComplianceRate, 0) / Math.max(vendors.length, 1);
-  const avgUptime =
-    vendors.reduce((s, v) => s + v.uptimePercent, 0) / Math.max(vendors.length, 1);
-  const breaches = vendors.reduce((s, v) => s + v.breachedTickets, 0);
+function monthStartUtc(year: number, monthIndex0: number): Date {
+  return new Date(Date.UTC(year, monthIndex0, 1));
+}
 
-  const labels = [
-    "Apr 2026",
-    "Mei 2026",
-    "Jun 2026",
-    "Jul 2026",
-    "Agu 2026",
-    "Sep 2026",
-  ].slice(-EXECUTIVE_TREND_MONTHS);
+function formatMonthLabelId(date: Date): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
 
-  return labels.map((monthLabel, i) => {
-    const drift = (i - labels.length + 1) * 0.35;
-    return {
-      monthLabel,
-      slaCompliance: Math.min(99.5, Math.max(88, avgSla + drift)),
-      uptimePercent: Math.min(99.99, Math.max(99.7, avgUptime + drift * 0.01)),
-      breachedTickets: Math.max(0, Math.round(breaches / labels.length - drift)),
-    };
-  });
+/**
+ * National SLA trend from MetricLog (aggregated across vendors per month).
+ */
+export async function buildSlaTrendFromDb(
+  asOf: Date = DEMO_AS_OF,
+  months: number = EXECUTIVE_TREND_MONTHS
+): Promise<MonthlyTrendPoint[]> {
+  try {
+    const end = monthStartUtc(asOf.getUTCFullYear(), asOf.getUTCMonth());
+    const start = monthStartUtc(
+      end.getUTCFullYear(),
+      end.getUTCMonth() - (months - 1)
+    );
+
+    const logs = await prisma.metricLog.findMany({
+      where: {
+        date: { gte: start, lte: end },
+      },
+      select: {
+        date: true,
+        uptimePercent: true,
+        totalTickets: true,
+        resolvedTickets: true,
+        breachedTickets: true,
+      },
+    });
+
+    const byMonth = new Map<
+      string,
+      {
+        date: Date;
+        totalTickets: number;
+        resolvedTickets: number;
+        breachedTickets: number;
+        uptimeWeighted: number;
+        uptimeWeight: number;
+      }
+    >();
+
+    for (const log of logs) {
+      const key = `${log.date.getUTCFullYear()}-${log.date.getUTCMonth()}`;
+      const bucket = byMonth.get(key) ?? {
+        date: monthStartUtc(log.date.getUTCFullYear(), log.date.getUTCMonth()),
+        totalTickets: 0,
+        resolvedTickets: 0,
+        breachedTickets: 0,
+        uptimeWeighted: 0,
+        uptimeWeight: 0,
+      };
+      const uptime = Number(log.uptimePercent);
+      const weight = Math.max(log.totalTickets, 1);
+      bucket.totalTickets += log.totalTickets;
+      bucket.resolvedTickets += log.resolvedTickets;
+      bucket.breachedTickets += log.breachedTickets;
+      bucket.uptimeWeighted += uptime * weight;
+      bucket.uptimeWeight += weight;
+      byMonth.set(key, bucket);
+    }
+
+    const points: MonthlyTrendPoint[] = [];
+    for (let i = months - 1; i >= 0; i--) {
+      const d = monthStartUtc(end.getUTCFullYear(), end.getUTCMonth() - i);
+      const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+      const bucket = byMonth.get(key);
+      if (!bucket || bucket.totalTickets === 0) {
+        points.push({
+          monthLabel: formatMonthLabelId(d),
+          slaCompliance: 0,
+          uptimePercent: 0,
+          breachedTickets: 0,
+        });
+        continue;
+      }
+      const denom = bucket.resolvedTickets + bucket.breachedTickets;
+      const slaCompliance =
+        denom > 0 ? (bucket.resolvedTickets / denom) * 100 : 100;
+      points.push({
+        monthLabel: formatMonthLabelId(d),
+        slaCompliance,
+        uptimePercent: bucket.uptimeWeighted / Math.max(bucket.uptimeWeight, 1),
+        breachedTickets: bucket.breachedTickets,
+      });
+    }
+    return points;
+  } catch {
+    return [];
+  }
 }
 
 /** Safe placeholder when DB is unreachable (build / cold start). */
@@ -198,6 +272,8 @@ export async function buildExecutiveSummary(
     `Progres deployment ${progressPercent.toFixed(1)}% dari kuota 3 tahun (${deployedUnits.toLocaleString("id-ID")} / ${DEPLOYMENT_TARGET_UNITS.toLocaleString("id-ID")} unit).`
   );
 
+  const trend = await buildSlaTrendFromDb(asOf);
+
   return {
     asOf: asOf.toISOString(),
     national: {
@@ -228,7 +304,7 @@ export async function buildExecutiveSummary(
       })),
     },
     vendors,
-    trend: buildTrend(vendors),
+    trend,
     narrative,
   };
 }

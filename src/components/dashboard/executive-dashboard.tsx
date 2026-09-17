@@ -199,10 +199,16 @@ export function ExecutiveDashboard({ summary }: { summary: ExecutiveSummary }) {
               <TrendingUp className="h-3.5 w-3.5" />
               Tren SLA 6 bulan
             </CardTitle>
+            <p className="pt-1 text-[10px] font-normal text-muted-foreground">
+              Dari MetricLog nasional (agregat vendor)
+            </p>
           </CardHeader>
           <CardContent>
             <div className="flex h-36 items-end gap-2">
-              {trend.map((t) => (
+              {trend.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Belum ada MetricLog.</p>
+              ) : (
+                trend.map((t) => (
                 <div
                   key={t.monthLabel}
                   className="flex flex-1 flex-col items-center gap-1"
@@ -213,8 +219,8 @@ export function ExecutiveDashboard({ summary }: { summary: ExecutiveSummary }) {
                   <div
                     className="w-full max-w-[40px] rounded-t bg-foreground/75"
                     style={{
-                      height: `${(t.slaCompliance / maxSla) * 100}%`,
-                      minHeight: 8,
+                      height: `${Math.max((t.slaCompliance / maxSla) * 100, t.slaCompliance > 0 ? 8 : 2)}%`,
+                      minHeight: t.slaCompliance > 0 ? 8 : 2,
                     }}
                     title={`Uptime ${t.uptimePercent.toFixed(2)}% · breach ${t.breachedTickets}`}
                   />
@@ -222,7 +228,8 @@ export function ExecutiveDashboard({ summary }: { summary: ExecutiveSummary }) {
                     {t.monthLabel.split(" ")[0]}
                   </span>
                 </div>
-              ))}
+              ))
+              )}
             </div>
           </CardContent>
         </Card>

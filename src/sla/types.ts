@@ -17,6 +17,20 @@ export interface TicketSlaInput {
   openedAt: Date;
   /** Tiket Selesai — omit / null while still open */
   closedAt?: Date | null;
+  /**
+   * Total paused milliseconds (clock-stop) to exclude from SLA elapsed.
+   * Prefer passing `pauseIntervals` so open pauses are included up to asOf.
+   */
+  pausedMs?: number;
+  /** Pause intervals — used when pausedMs not provided. */
+  pauseIntervals?: SlaPauseInterval[];
+}
+
+/** One clock-stop window (null endedAt = currently paused). */
+export interface SlaPauseInterval {
+  startedAt: Date;
+  endedAt?: Date | null;
+  reasonCode?: string;
 }
 
 export interface ResolutionDuration {
@@ -38,8 +52,13 @@ export interface SlaLimitResult {
 
 export interface SlaEvaluation extends SlaLimitResult {
   status: SlaEvaluationStatus;
+  /** Effective resolution duration (wall-clock minus pauses) — used for status */
   duration: ResolutionDuration;
-  /** 0–1+ fraction of SLA consumed */
+  effectiveDurationMs: number;
+  wallDurationMs: number;
+  pausedMs: number;
+  clockStopped: boolean;
+  /** 0–1+ fraction of SLA consumed (effective) */
   elapsedRatio: number;
   /** Milliseconds remaining until breach (negative if already breached) */
   remainingMs: number;

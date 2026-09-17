@@ -128,7 +128,8 @@ export function computeSlaDeadline(
   location: TicketLocation,
   category: TicketCategory,
   openedAt: Date,
-  itsmType: ItsmType = "INCIDENT"
+  itsmType: ItsmType = "INCIDENT",
+  pausedMs = 0
 ): Date {
   const { limitMs } = getResolutionLimitMinutes(
     location,
@@ -136,7 +137,7 @@ export function computeSlaDeadline(
     openedAt,
     itsmType
   );
-  return new Date(openedAt.getTime() + limitMs);
+  return new Date(openedAt.getTime() + limitMs + Math.max(0, pausedMs));
 }
 
 function assertValidDate(value: Date, field: string): void {

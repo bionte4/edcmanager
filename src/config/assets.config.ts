@@ -22,8 +22,16 @@ export const EDC_BRANDS = ["Ingenico", "Verifone", "PAX", "Castles"] as const;
 export const REGIONAL_OFFICES = [
   "RO Jakarta 1",
   "RO Bandung",
+  "RO Semarang",
   "RO Surabaya",
+  "RO Medan",
+  "RO Palembang",
   "RO Denpasar",
+  "RO Makassar",
+  "RO Balikpapan",
+  "RO Pontianak",
+  "RO Manado",
+  "RO Jayapura",
 ] as const;
 
 /**

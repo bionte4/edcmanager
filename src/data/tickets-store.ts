@@ -5,15 +5,22 @@ import {
   transitionTicket,
   type NocUser,
   type OpsTicket,
+  type SlaPauseRow,
   type TicketActivityRow,
 } from "@/lib/ticketing";
 import { prisma } from "@/lib/prisma";
 import { computeSlaDeadline, evaluateSlaStatus } from "@/sla";
+import {
+  isSlaPauseReasonCode,
+  SLA_PAUSE_REASON_LABELS,
+  type SlaPauseReasonCode,
+} from "@/config/sla-pause.config";
 import type { WorkflowTicketStatus } from "@/config/noc.config";
 import type { ItsmType, OperationalProcess } from "@/config/itsm.config";
 import type { TicketCategory, TicketLocation } from "@/config/sla.config";
 import type {
   Prisma,
+  SlaPauseInterval,
   Ticket,
   TicketActivity,
   TicketActivityType,
@@ -38,6 +45,10 @@ const ticketInclude = {
     include: { actor: true },
     orderBy: { createdAt: "desc" as const },
   },
+  slaPauses: {
+    include: { startedBy: true, endedBy: true },
+    orderBy: { startedAt: "asc" as const },
+  },
 } satisfies Prisma.TicketInclude;
 
 type TicketWithRelations = Ticket & {
@@ -45,6 +56,10 @@ type TicketWithRelations = Ticket & {
   nocOwner: User | null;
   createdBy: User | null;
   activities: (TicketActivity & { actor: User | null })[];
+  slaPauses: (SlaPauseInterval & {
+    startedBy: User | null;
+    endedBy: User | null;
+  })[];
 };
 
 function mapActivity(
@@ -58,6 +73,20 @@ function mapActivity(
     at: row.createdAt.toISOString(),
     fromStatus: (row.fromStatus as WorkflowTicketStatus | null) ?? undefined,
     toStatus: (row.toStatus as WorkflowTicketStatus | null) ?? undefined,
+  };
+}
+
+function mapPause(
+  row: SlaPauseInterval & { startedBy: User | null; endedBy: User | null }
+): SlaPauseRow {
+  return {
+    id: row.id,
+    reasonCode: row.reasonCode,
+    reasonNote: row.reasonNote ?? undefined,
+    startedAt: row.startedAt.toISOString(),
+    endedAt: row.endedAt?.toISOString() ?? null,
+    startedByName: row.startedBy?.name,
+    endedByName: row.endedBy?.name,
   };
 }
 
@@ -88,6 +117,7 @@ function mapTicket(row: TicketWithRelations): OpsTicket {
     dispatchedAt: row.dispatchedAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
     activities: row.activities.map(mapActivity),
+    slaPauses: row.slaPauses.map(mapPause),
   };
 }
 
@@ -114,10 +144,7 @@ async function resolveVendorId(vendorName: string): Promise<string> {
   return vendor.id;
 }
 
-function persistedSlaStatus(
-  ticket: Pick<OpsTicket, "location" | "category" | "itsmType" | "openedAt" | "closedAt">,
-  asOf = new Date()
-) {
+function persistedSlaStatus(ticket: OpsTicket, asOf = new Date()) {
   return evaluateSlaStatus(
     {
       location: ticket.location,
@@ -125,6 +152,10 @@ function persistedSlaStatus(
       itsmType: ticket.itsmType,
       openedAt: new Date(ticket.openedAt),
       closedAt: ticket.closedAt ? new Date(ticket.closedAt) : null,
+      pauseIntervals: (ticket.slaPauses ?? []).map((p) => ({
+        startedAt: new Date(p.startedAt),
+        endedAt: p.endedAt ? new Date(p.endedAt) : null,
+      })),
     },
     asOf
   ).status;
@@ -427,4 +458,197 @@ export function toIntegrationDto(ticket: OpsTicket, asOf = new Date()) {
       toStatus: a.toStatus ?? null,
     })),
   };
+}
+
+export async function pauseSlaClock(
+  ticketId: string,
+  input: {
+    reasonCode: string;
+    reasonNote?: string;
+    actor: NocUser;
+  }
+): Promise<OpsTicket> {
+  const row = await findTicketRow(ticketId);
+  if (!row) throw Object.assign(new Error("Ticket not found"), { status: 404 });
+  if (row.closedAt) throw new Error("Tiket sudah selesai — clock-stop tidak berlaku.");
+  if (!isSlaPauseReasonCode(input.reasonCode)) {
+    throw new Error("Alasan clock-stop tidak valid.");
+  }
+  const reasonCode = input.reasonCode as SlaPauseReasonCode;
+  if (reasonCode === "OTHER" && !input.reasonNote?.trim()) {
+    throw new Error("Catatan wajib untuk alasan Lainnya.");
+  }
+
+  const open = row.slaPauses.find((p) => p.endedAt == null);
+  if (open) throw new Error("SLA clock sudah di-stop. Resume dulu sebelum pause lagi.");
+
+  const label = SLA_PAUSE_REASON_LABELS[reasonCode];
+  const note = input.reasonNote?.trim()
+    ? `Clock-stop: ${label} — ${input.reasonNote.trim()}`
+    : `Clock-stop: ${label}`;
+
+  const updated = await prisma.ticket.update({
+    where: { id: row.id },
+    data: {
+      slaPauses: {
+        create: {
+          reasonCode,
+          reasonNote: input.reasonNote?.trim() || null,
+          startedById: input.actor.id,
+        },
+      },
+      activities: {
+        create: {
+          activityType: "CLOCK_STOPPED",
+          note,
+          actorId: input.actor.id,
+        },
+      },
+    },
+    include: ticketInclude,
+  });
+
+  const mapped = mapTicket(updated);
+  const evaled = evaluateSlaStatus(
+    {
+      location: mapped.location,
+      category: mapped.category,
+      itsmType: mapped.itsmType,
+      openedAt: new Date(mapped.openedAt),
+      closedAt: null,
+      pauseIntervals: (mapped.slaPauses ?? []).map((p) => ({
+        startedAt: new Date(p.startedAt),
+        endedAt: p.endedAt ? new Date(p.endedAt) : null,
+      })),
+    },
+    new Date()
+  );
+  await prisma.ticket.update({
+    where: { id: row.id },
+    data: {
+      slaStatus: evaled.status,
+      slaDeadlineAt: evaled.deadlineAt,
+    },
+  });
+
+  return mapTicket(updated);
+}
+
+export async function resumeSlaClock(
+  ticketId: string,
+  input: { actor: NocUser; note?: string }
+): Promise<OpsTicket> {
+  const row = await findTicketRow(ticketId);
+  if (!row) throw Object.assign(new Error("Ticket not found"), { status: 404 });
+
+  const open = row.slaPauses.find((p) => p.endedAt == null);
+  if (!open) throw new Error("Tidak ada clock-stop aktif pada tiket ini.");
+
+  const now = new Date();
+  await prisma.slaPauseInterval.update({
+    where: { id: open.id },
+    data: { endedAt: now, endedById: input.actor.id },
+  });
+
+  const note = input.note?.trim()
+    ? `Clock-resume — ${input.note.trim()}`
+    : "Clock-resume — SLA timer dilanjutkan";
+
+  const updated = await prisma.ticket.update({
+    where: { id: row.id },
+    data: {
+      activities: {
+        create: {
+          activityType: "CLOCK_RESUMED",
+          note,
+          actorId: input.actor.id,
+        },
+      },
+    },
+    include: ticketInclude,
+  });
+
+  const mapped = mapTicket(updated);
+  const evaled = evaluateSlaStatus(
+    {
+      location: mapped.location,
+      category: mapped.category,
+      itsmType: mapped.itsmType,
+      openedAt: new Date(mapped.openedAt),
+      closedAt: mapped.closedAt ? new Date(mapped.closedAt) : null,
+      pauseIntervals: (mapped.slaPauses ?? []).map((p) => ({
+        startedAt: new Date(p.startedAt),
+        endedAt: p.endedAt ? new Date(p.endedAt) : null,
+      })),
+    },
+    now
+  );
+  await prisma.ticket.update({
+    where: { id: row.id },
+    data: {
+      slaStatus: evaled.status,
+      slaDeadlineAt: computeSlaDeadline(
+        mapped.location,
+        mapped.category,
+        new Date(mapped.openedAt),
+        mapped.itsmType,
+        evaled.pausedMs
+      ),
+    },
+  });
+
+  const refreshed = await findTicketRow(row.id);
+  return mapTicket(refreshed!);
+}
+
+/** Open tickets at WARNING/BREACHED for 16:00 near-breach audit (excludes clock-stopped). */
+export async function listNearBreachTickets(asOf = new Date()): Promise<
+  Array<
+    OpsTicket & {
+      slaStatus: string;
+      elapsedLabel: string;
+      remainingLabel: string;
+      elapsedRatio: number;
+      deadlineAt: string;
+      clockStopped: boolean;
+      pausedMs: number;
+    }
+  >
+> {
+  const tickets = await listOpsTickets();
+  const open = tickets.filter(
+    (t) => t.status !== "RESOLVED" && t.status !== "CLOSED"
+  );
+  return open
+    .map((t) => {
+      const enriched = enrichOpsTicket(t, asOf, listOlaPolicies({ activeOnly: true }));
+      return {
+        ...t,
+        slaStatus: enriched.slaStatus,
+        elapsedLabel: enriched.elapsedLabel,
+        remainingLabel: enriched.remainingLabel,
+        elapsedRatio: evaluateSlaStatus(
+          {
+            location: t.location,
+            category: t.category,
+            itsmType: t.itsmType,
+            openedAt: new Date(t.openedAt),
+            pauseIntervals: (t.slaPauses ?? []).map((p) => ({
+              startedAt: new Date(p.startedAt),
+              endedAt: p.endedAt ? new Date(p.endedAt) : null,
+            })),
+          },
+          asOf
+        ).elapsedRatio,
+        deadlineAt: enriched.deadlineAt,
+        clockStopped: enriched.clockStopped,
+        pausedMs: enriched.pausedMs,
+      };
+    })
+    .filter(
+      (t) =>
+        !t.clockStopped &&
+        (t.slaStatus === "WARNING" || t.slaStatus === "BREACHED")
+    )
+    .sort((a, b) => b.elapsedRatio - a.elapsedRatio);
 }

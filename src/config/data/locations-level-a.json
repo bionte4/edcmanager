@@ -1,0 +1,93 @@
+{
+  "regionalOffices": [
+    "RO Jakarta 1",
+    "RO Bandung",
+    "RO Semarang",
+    "RO Surabaya",
+    "RO Medan",
+    "RO Palembang",
+    "RO Denpasar",
+    "RO Makassar",
+    "RO Balikpapan",
+    "RO Pontianak",
+    "RO Manado",
+    "RO Jayapura"
+  ],
+  "sites": [
+    { "code": "JKT_PUSAT", "label": "Jakarta Pusat", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Jakarta 1", "sortOrder": 10 },
+    { "code": "JKT_SELATAN", "label": "Jakarta Selatan", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Jakarta 1", "sortOrder": 11 },
+    { "code": "JKT_BARAT", "label": "Jakarta Barat", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Jakarta 1", "sortOrder": 12 },
+    { "code": "JKT_UTARA", "label": "Jakarta Utara", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Jakarta 1", "sortOrder": 13 },
+    { "code": "JKT_TIMUR", "label": "Jakarta Timur", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Jakarta 1", "sortOrder": 14 },
+    { "code": "BKS_KOTA", "label": "Kota Bekasi", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Jakarta 1", "sortOrder": 15 },
+    { "code": "TNG_KOTA", "label": "Kota Tangerang", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Jakarta 1", "sortOrder": 16 },
+    { "code": "DPK_KOTA", "label": "Kota Depok", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Jakarta 1", "sortOrder": 17 },
+    { "code": "BGR_KOTA", "label": "Kota Bogor", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Jakarta 1", "sortOrder": 18 },
+
+    { "code": "BDG_KOTA", "label": "Bandung Kota", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Bandung", "sortOrder": 20 },
+    { "code": "BDG_CIMAHI", "label": "Cimahi", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Bandung", "sortOrder": 21 },
+    { "code": "BDG_KAB", "label": "Kab. Bandung", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Bandung", "sortOrder": 22 },
+    { "code": "TSK_KOTA", "label": "Tasikmalaya", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Bandung", "sortOrder": 23 },
+    { "code": "CJR_KOTA", "label": "Cirebon", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Bandung", "sortOrder": 24 },
+    { "code": "SKB_KOTA", "label": "Sukabumi", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Bandung", "sortOrder": 25 },
+
+    { "code": "SMG_KOTA", "label": "Semarang Kota", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Semarang", "sortOrder": 30 },
+    { "code": "YGY_KOTA", "label": "Yogyakarta", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Semarang", "sortOrder": 31 },
+    { "code": "SKA_KOTA", "label": "Surakarta / Solo", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Semarang", "sortOrder": 32 },
+    { "code": "PWT_KOTA", "label": "Purwokerto", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Semarang", "sortOrder": 33 },
+    { "code": "MGL_KOTA", "label": "Magelang", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Semarang", "sortOrder": 34 },
+    { "code": "PKL_KOTA", "label": "Pekalongan", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Semarang", "sortOrder": 35 },
+
+    { "code": "SBY_PUSAT", "label": "Surabaya Pusat", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Surabaya", "sortOrder": 40 },
+    { "code": "SBY_BARAT", "label": "Surabaya Barat", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Surabaya", "sortOrder": 41 },
+    { "code": "SDA_KOTA", "label": "Sidoarjo", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Surabaya", "sortOrder": 42 },
+    { "code": "MLG_KOTA", "label": "Malang", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Surabaya", "sortOrder": 43 },
+    { "code": "KDR_KOTA", "label": "Kediri", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Surabaya", "sortOrder": 44 },
+    { "code": "JBR_KOTA", "label": "Jember", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Surabaya", "sortOrder": 45 },
+    { "code": "MDN_JTM", "label": "Madiun", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Surabaya", "sortOrder": 46 },
+
+    { "code": "MDN_KOTA", "label": "Medan Kota", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Medan", "sortOrder": 50 },
+    { "code": "BTM_KOTA", "label": "Batam", "slaZone": "LUAR_PULAU", "regionalOffice": "RO Medan", "sortOrder": 51 },
+    { "code": "PBR_KOTA", "label": "Pekanbaru", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Medan", "sortOrder": 52 },
+    { "code": "PDG_KOTA", "label": "Padang", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Medan", "sortOrder": 53 },
+    { "code": "BNA_KOTA", "label": "Banda Aceh", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Medan", "sortOrder": 54 },
+    { "code": "PMT_KOTA", "label": "Pematangsiantar", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Medan", "sortOrder": 55 },
+
+    { "code": "PLG_KOTA", "label": "Palembang Kota", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Palembang", "sortOrder": 60 },
+    { "code": "BKL_KOTA", "label": "Bengkulu", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Palembang", "sortOrder": 61 },
+    { "code": "LPG_KOTA", "label": "Bandar Lampung", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Palembang", "sortOrder": 62 },
+    { "code": "JMB_KOTA", "label": "Jambi", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Palembang", "sortOrder": 63 },
+    { "code": "PGB_KOTA", "label": "Pangkalpinang", "slaZone": "LUAR_PULAU", "regionalOffice": "RO Palembang", "sortOrder": 64 },
+
+    { "code": "DPS_BALI", "label": "Denpasar", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Denpasar", "sortOrder": 70 },
+    { "code": "BTB_BALI", "label": "Badung / Kuta", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Denpasar", "sortOrder": 71 },
+    { "code": "GYR_BALI", "label": "Gianyar", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Denpasar", "sortOrder": 72 },
+    { "code": "MTR_NTB", "label": "Mataram", "slaZone": "LUAR_PULAU", "regionalOffice": "RO Denpasar", "sortOrder": 73 },
+    { "code": "KOE_NTT", "label": "Kupang", "slaZone": "LUAR_PULAU", "regionalOffice": "RO Denpasar", "sortOrder": 74 },
+
+    { "code": "MKS_KOTA", "label": "Makassar Kota", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Makassar", "sortOrder": 80 },
+    { "code": "KYR_KOTA", "label": "Parepare", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Makassar", "sortOrder": 81 },
+    { "code": "MDO_SUL", "label": "Palu", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Makassar", "sortOrder": 82 },
+    { "code": "KDI_KOTA", "label": "Kendari", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Makassar", "sortOrder": 83 },
+    { "code": "GTO_KOTA", "label": "Gorontalo", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Makassar", "sortOrder": 84 },
+
+    { "code": "BPN_KOTA", "label": "Balikpapan", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Balikpapan", "sortOrder": 90 },
+    { "code": "SMD_KOTA", "label": "Samarinda", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Balikpapan", "sortOrder": 91 },
+    { "code": "BJM_KOTA", "label": "Banjarmasin", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Balikpapan", "sortOrder": 92 },
+    { "code": "TGR_KAL", "label": "Tanjung Selor", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Balikpapan", "sortOrder": 93 },
+
+    { "code": "PTK_KOTA", "label": "Pontianak", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Pontianak", "sortOrder": 100 },
+    { "code": "SBS_KOTA", "label": "Singkawang", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Pontianak", "sortOrder": 101 },
+    { "code": "PONT_KAB", "label": "Kab. Kubu Raya", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Pontianak", "sortOrder": 102 },
+
+    { "code": "MDO_KOTA", "label": "Manado", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Manado", "sortOrder": 110 },
+    { "code": "BIT_KOTA", "label": "Bitung", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Manado", "sortOrder": 111 },
+    { "code": "TTE_KOTA", "label": "Ternate", "slaZone": "LUAR_PULAU", "regionalOffice": "RO Manado", "sortOrder": 112 },
+    { "code": "AMB_KOTA", "label": "Ambon", "slaZone": "LUAR_PULAU", "regionalOffice": "RO Manado", "sortOrder": 113 },
+
+    { "code": "DJJ_KOTA", "label": "Jayapura", "slaZone": "DALAM_KOTA", "regionalOffice": "RO Jayapura", "sortOrder": 120 },
+    { "code": "MKW_KOTA", "label": "Manokwari", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Jayapura", "sortOrder": 121 },
+    { "code": "SOQ_KOTA", "label": "Sorong", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Jayapura", "sortOrder": 122 },
+    { "code": "TIM_KOTA", "label": "Timika", "slaZone": "LUAR_KOTA", "regionalOffice": "RO Jayapura", "sortOrder": 123 }
+  ]
+}

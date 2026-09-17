@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   Bell,
   Boxes,
   Briefcase,
@@ -47,6 +48,7 @@ const ICON_MAP: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard,
   executive: Briefcase,
   ticket: Ticket,
+  alert: AlertTriangle,
   workforce: CalendarClock,
   inventory: Warehouse,
   reporting: FileBarChart2,

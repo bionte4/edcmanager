@@ -3,10 +3,21 @@
  * Run: node prisma/seed.mjs   OR   npx tsx prisma/seed.ts
  */
 import { PrismaClient } from "@prisma/client";
+import { readFileSync } from "fs";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
 const prisma = new PrismaClient();
 const DEMO_PASSWORD = "edc123";
 const DEMO_AS_OF = new Date("2026-09-17T07:00:00.000Z");
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const levelA = JSON.parse(
+  readFileSync(
+    join(__dirname, "../src/config/data/locations-level-a.json"),
+    "utf8"
+  )
+);
 
 const CATEGORIES = [
   {
@@ -27,7 +38,7 @@ const CATEGORIES = [
   },
 ];
 
-const LOCATIONS = [
+const ZONE_ALIASES = [
   {
     id: "loc-dalam-kota",
     code: "DALAM_KOTA",
@@ -55,114 +66,19 @@ const LOCATIONS = [
     sortOrder: 3,
     isTicketSelectable: false,
   },
-  {
-    id: "loc-jkt-pusat",
-    code: "JKT_PUSAT",
-    label: "Jakarta Pusat",
-    slaZone: "DALAM_KOTA",
-    regionalOffice: "RO Jakarta 1",
-    description: "Thamrin / Sudirman / Menteng",
-    sortOrder: 10,
+];
+
+const LOCATIONS = [
+  ...ZONE_ALIASES,
+  ...levelA.sites.map((s) => ({
+    id: `loc-${s.code.toLowerCase().replace(/_/g, "-")}`,
+    code: s.code,
+    label: s.label,
+    slaZone: s.slaZone,
+    regionalOffice: s.regionalOffice,
+    sortOrder: s.sortOrder,
     isTicketSelectable: true,
-  },
-  {
-    id: "loc-jkt-selatan",
-    code: "JKT_SELATAN",
-    label: "Jakarta Selatan",
-    slaZone: "DALAM_KOTA",
-    regionalOffice: "RO Jakarta 1",
-    description: "Kuningan / TB Simatupang",
-    sortOrder: 11,
-    isTicketSelectable: true,
-  },
-  {
-    id: "loc-jkt-barat",
-    code: "JKT_BARAT",
-    label: "Jakarta Barat",
-    slaZone: "DALAM_KOTA",
-    regionalOffice: "RO Jakarta 1",
-    description: "Kebon Jeruk / Grogol",
-    sortOrder: 12,
-    isTicketSelectable: true,
-  },
-  {
-    id: "loc-jkt-utara",
-    code: "JKT_UTARA",
-    label: "Jakarta Utara",
-    slaZone: "DALAM_KOTA",
-    regionalOffice: "RO Jakarta 1",
-    description: "Kelapa Gading / Pluit",
-    sortOrder: 13,
-    isTicketSelectable: true,
-  },
-  {
-    id: "loc-jkt-timur",
-    code: "JKT_TIMUR",
-    label: "Jakarta Timur",
-    slaZone: "DALAM_KOTA",
-    regionalOffice: "RO Jakarta 1",
-    description: "Cakung / Bekasi border ops",
-    sortOrder: 14,
-    isTicketSelectable: true,
-  },
-  {
-    id: "loc-bdg",
-    code: "BDG_KOTA",
-    label: "Bandung Kota",
-    slaZone: "LUAR_KOTA",
-    regionalOffice: "RO Bandung",
-    description: "Pusat kota Bandung",
-    sortOrder: 20,
-    isTicketSelectable: true,
-  },
-  {
-    id: "loc-bdg-cimahi",
-    code: "BDG_CIMAHI",
-    label: "Cimahi",
-    slaZone: "LUAR_KOTA",
-    regionalOffice: "RO Bandung",
-    sortOrder: 21,
-    isTicketSelectable: true,
-  },
-  {
-    id: "loc-sby-pusat",
-    code: "SBY_PUSAT",
-    label: "Surabaya Pusat",
-    slaZone: "LUAR_KOTA",
-    regionalOffice: "RO Surabaya",
-    description: "Tunjungan / Gubeng",
-    sortOrder: 22,
-    isTicketSelectable: true,
-  },
-  {
-    id: "loc-sby-barat",
-    code: "SBY_BARAT",
-    label: "Surabaya Barat",
-    slaZone: "LUAR_KOTA",
-    regionalOffice: "RO Surabaya",
-    sortOrder: 23,
-    isTicketSelectable: true,
-  },
-  {
-    id: "loc-dps",
-    code: "DPS_BALI",
-    label: "Denpasar Bali",
-    slaZone: "LUAR_PULAU",
-    regionalOffice: "RO Denpasar",
-    description: "Denpasar + Sanur",
-    sortOrder: 30,
-    isTicketSelectable: true,
-  },
-  {
-    id: "loc-btb",
-    code: "BTB_BALI",
-    label: "Badung / Kuta",
-    slaZone: "LUAR_PULAU",
-    regionalOffice: "RO Denpasar",
-    description: "Kuta / Nusa Dua corridor",
-    sortOrder: 31,
-    isTicketSelectable: true,
-  },
+  })),
 ];
 
 const OLA = [
@@ -378,25 +294,43 @@ async function main() {
     });
   }
 
-  const month = new Date("2026-09-01T00:00:00.000Z");
-  for (const [vendorId, uptime, total, breached, met] of [
-    ["v1", 99.94, 142, 5, true],
-    ["v2", 99.86, 128, 11, false],
-  ]) {
-    await prisma.metricLog.upsert({
-      where: { vendorId_date: { vendorId, date: month } },
-      update: {},
-      create: {
-        vendorId,
-        date: month,
-        uptimePercent: uptime,
-        targetPercent: 99.9,
-        metTarget: met,
-        totalTickets: total,
-        resolvedTickets: total - breached,
-        breachedTickets: breached,
-      },
-    });
+  // Monthly MetricLog for executive SLA trend (last 6 months through Sep 2026)
+  const metricMonths = [
+    // [yyyy, mm(1-12), v1: [uptime, total, breached], v2: [...]]
+    [2026, 4, [99.9, 110, 10], [99.82, 98, 12]],
+    [2026, 5, [99.91, 118, 9], [99.84, 105, 11]],
+    [2026, 6, [99.92, 125, 8], [99.85, 112, 10]],
+    [2026, 7, [99.93, 130, 7], [99.85, 118, 10]],
+    [2026, 8, [99.94, 136, 6], [99.86, 122, 9]],
+    [2026, 9, [99.94, 142, 5], [99.86, 128, 11]],
+  ];
+  for (const [year, monthNum, v1, v2] of metricMonths) {
+    const date = new Date(Date.UTC(year, monthNum - 1, 1));
+    for (const [vendorId, uptime, total, breached] of [
+      ["v1", ...v1],
+      ["v2", ...v2],
+    ]) {
+      await prisma.metricLog.upsert({
+        where: { vendorId_date: { vendorId, date } },
+        update: {
+          uptimePercent: uptime,
+          metTarget: uptime >= 99.9,
+          totalTickets: total,
+          resolvedTickets: total - breached,
+          breachedTickets: breached,
+        },
+        create: {
+          vendorId,
+          date,
+          uptimePercent: uptime,
+          targetPercent: 99.9,
+          metTarget: uptime >= 99.9,
+          totalTickets: total,
+          resolvedTickets: total - breached,
+          breachedTickets: breached,
+        },
+      });
+    }
   }
 
   const shiftDate = new Date("2026-09-17T00:00:00.000Z");

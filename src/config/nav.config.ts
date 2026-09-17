@@ -23,7 +23,8 @@ export type NavIcon =
   | "category"
   | "boxes"
   | "plug"
-  | "package";
+  | "package"
+  | "alert";
 
 export type NavPlacement = "primary" | "secondary" | "header";
 
@@ -69,6 +70,16 @@ export const NAV_ITEMS: readonly NavItemDef[] = [
     label: "Tiket",
     shortLabel: "Tiket",
     icon: "ticket",
+    permission: "ticket:read",
+    placement: "primary",
+    group: "ops",
+  },
+  {
+    id: "near-breach",
+    href: "/ops/near-breach",
+    label: "Near-breach",
+    shortLabel: "16:00",
+    icon: "alert",
     permission: "ticket:read",
     placement: "primary",
     group: "ops",
@@ -167,12 +178,12 @@ export const NAV_GROUP_LABELS: Record<NavItemDef["group"], string> = {
  * Falls back to first allowed primary items.
  */
 export const ROLE_PRIMARY_HREFS: Record<AppRole, readonly string[]> = {
-  NOC: ["/", "/ticketing", "/workforce"],
-  SUPERVISOR: ["/", "/ticketing", "/workforce", "/inventory"],
-  OPS_MANAGER: ["/", "/ticketing", "/inventory", "/reporting"],
+  NOC: ["/", "/ticketing", "/ops/near-breach", "/workforce"],
+  SUPERVISOR: ["/", "/ticketing", "/ops/near-breach", "/workforce"],
+  OPS_MANAGER: ["/", "/ticketing", "/ops/near-breach", "/reporting"],
   VENDOR_TECH: ["/", "/ticketing", "/inventory"],
   GM: ["/", "/executive", "/reporting", "/vendors"],
-  ADMIN: ["/", "/ticketing", "/workforce", "/inventory"],
+  ADMIN: ["/", "/ticketing", "/ops/near-breach", "/inventory"],
 };
 
 export function canAccessNavItem(

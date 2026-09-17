@@ -57,7 +57,9 @@ export type TicketActivityType =
   | "ESCALATED"
   | "RESOLVED"
   | "CLOSED"
-  | "HANDOVER";
+  | "HANDOVER"
+  | "CLOCK_STOPPED"
+  | "CLOCK_RESUMED";
 
 export interface NocUser {
   id: string;
@@ -89,6 +91,16 @@ export interface TicketActivityRow {
   toStatus?: WorkflowTicketStatus;
 }
 
+export interface SlaPauseRow {
+  id: string;
+  reasonCode: string;
+  reasonNote?: string;
+  startedAt: string;
+  endedAt?: string | null;
+  startedByName?: string;
+  endedByName?: string;
+}
+
 export interface OpsTicket {
   id: string;
   ticketNumber: string;
@@ -115,6 +127,8 @@ export interface OpsTicket {
   dispatchedAt?: string | null;
   updatedAt?: string;
   activities: TicketActivityRow[];
+  /** Clock-stop intervals; default [] when omitted (legacy mocks). */
+  slaPauses?: SlaPauseRow[];
 }
 
 export function canTransition(
@@ -185,6 +199,7 @@ export function createTicket(input: {
         toStatus: "OPEN",
       },
     ],
+    slaPauses: [],
   };
 }
 
@@ -292,6 +307,12 @@ export function enrichOpsTicket(
   asOf: Date = new Date(),
   olaPolicies: OlaPolicy[] = defaultOlaPolicies()
 ) {
+  const pauseIntervals = (ticket.slaPauses ?? []).map((p) => ({
+    startedAt: new Date(p.startedAt),
+    endedAt: p.endedAt ? new Date(p.endedAt) : null,
+    reasonCode: p.reasonCode,
+  }));
+
   const evaluation = evaluateSlaStatus(
     {
       location: ticket.location,
@@ -299,6 +320,7 @@ export function enrichOpsTicket(
       itsmType: ticket.itsmType,
       openedAt: new Date(ticket.openedAt),
       closedAt: ticket.closedAt ? new Date(ticket.closedAt) : null,
+      pauseIntervals,
     },
     asOf
   );
@@ -306,7 +328,8 @@ export function enrichOpsTicket(
     ticket.location,
     ticket.category,
     new Date(ticket.openedAt),
-    ticket.itsmType
+    ticket.itsmType,
+    evaluation.pausedMs
   );
 
   const ola: TicketOlaBundle = evaluateTicketOla(
@@ -331,9 +354,16 @@ export function enrichOpsTicket(
     slaStatus: evaluation.status,
     elapsedLabel: evaluation.duration.formatted,
     remainingMs: evaluation.remainingMs,
+    remainingLabel:
+      evaluation.remainingMs < 0
+        ? `+${Math.abs(Math.round(evaluation.remainingMs / 60000))}m over`
+        : `${Math.round(evaluation.remainingMs / 60000)}m left`,
     deadlineAt: deadline.toISOString(),
+    pausedMs: evaluation.pausedMs,
+    clockStopped: evaluation.clockStopped,
     needsEscalation:
-      evaluation.status === "WARNING" || evaluation.status === "BREACHED",
+      !evaluation.clockStopped &&
+      (evaluation.status === "WARNING" || evaluation.status === "BREACHED"),
     ola,
     olaAckStatus: ola.acknowledge?.status ?? null,
     olaAckLabel: ola.acknowledge
