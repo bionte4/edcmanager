@@ -1,7 +1,9 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
+  approveSlaPause,
   pauseSlaClock,
+  rejectSlaPause,
   resumeSlaClock,
 } from "@/data/tickets-store";
 import { findUserById } from "@/data/users-store";
@@ -10,7 +12,7 @@ import {
   sessionToAuthUser,
   verifySessionToken,
 } from "@/lib/auth/session";
-import { assertCan, type AuthUser } from "@/lib/rbac";
+import { assertCan, can, type AuthUser } from "@/lib/rbac";
 import type { NocUser } from "@/lib/ticketing";
 
 async function requireUser(): Promise<{ auth: AuthUser; noc: NocUser }> {
@@ -49,14 +51,33 @@ export async function POST(
 ) {
   try {
     const { auth, noc } = await requireUser();
-    assertCan(auth, "ticket:sla_pause");
     const { id } = await context.params;
     const body = (await request.json()) as {
-      action?: "pause" | "resume";
+      action?: "pause" | "resume" | "approve" | "reject";
       reasonCode?: string;
       reasonNote?: string;
       note?: string;
+      pauseId?: string;
     };
+
+    if (body.action === "approve" || body.action === "reject") {
+      assertCan(auth, "ticket:sla_pause_approve");
+      const ticket =
+        body.action === "approve"
+          ? await approveSlaPause(id, {
+              actor: noc,
+              pauseId: body.pauseId,
+              note: body.note,
+            })
+          : await rejectSlaPause(id, {
+              actor: noc,
+              pauseId: body.pauseId,
+              note: body.note,
+            });
+      return NextResponse.json({ ticket });
+    }
+
+    assertCan(auth, "ticket:sla_pause");
 
     if (body.action === "resume") {
       const ticket = await resumeSlaClock(id, {
@@ -72,11 +93,12 @@ export async function POST(
         reasonCode: body.reasonCode,
         reasonNote: body.reasonNote,
         actor: noc,
+        autoApprove: can(auth, "ticket:sla_pause_approve"),
       });
       return NextResponse.json({ ticket });
     }
 
-    throw new Error("action harus pause atau resume.");
+    throw new Error("action harus pause, resume, approve, atau reject.");
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Error" },

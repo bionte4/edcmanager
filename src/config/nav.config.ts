@@ -85,12 +85,32 @@ export const NAV_ITEMS: readonly NavItemDef[] = [
     group: "ops",
   },
   {
+    id: "campaigns",
+    href: "/ops/campaigns",
+    label: "PM / Peak",
+    shortLabel: "PM",
+    icon: "ticket",
+    permission: "ticket:read",
+    placement: "secondary",
+    group: "ops",
+  },
+  {
+    id: "dispatch",
+    href: "/ops/dispatch",
+    label: "Dispatch",
+    shortLabel: "Disp",
+    icon: "ticket",
+    permission: "ticket:read",
+    placement: "secondary",
+    group: "ops",
+  },
+  {
     id: "workforce",
     href: "/workforce",
     label: "Workforce",
     shortLabel: "WFM",
     icon: "workforce",
-    anyOf: ["noc:read", "wfm:read"],
+    anyOf: ["noc:read", "wfm:read", "liaison:read"],
     placement: "primary",
     group: "ops",
   },
@@ -184,6 +204,7 @@ export const ROLE_PRIMARY_HREFS: Record<AppRole, readonly string[]> = {
   VENDOR_TECH: ["/", "/ticketing", "/inventory"],
   GM: ["/", "/executive", "/reporting", "/vendors"],
   ADMIN: ["/", "/ticketing", "/ops/near-breach", "/inventory"],
+  LIAISON: ["/", "/ticketing", "/workforce", "/ops/near-breach"],
 };
 
 export function canAccessNavItem(

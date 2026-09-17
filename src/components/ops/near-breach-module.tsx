@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Clock, RefreshCw } from "lucide-react";
+import { AlertTriangle, Clock, Mail, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
+  isSensitivePauseReason,
   SLA_PAUSE_REASON_CODES,
   SLA_PAUSE_REASON_LABELS,
   type SlaPauseReasonCode,
@@ -40,12 +41,14 @@ type NearBreachRow = {
 export function NearBreachModule() {
   const { can } = useAuth();
   const canPause = can("ticket:sla_pause");
+  const canApprove = can("ticket:sla_pause_approve");
   const [rows, setRows] = useState<NearBreachRow[]>([]);
   const [auditWindowActive, setAuditWindowActive] = useState(false);
   const [auditLabel, setAuditLabel] = useState("Audit 16:00 WIB");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [digestBusy, setDigestBusy] = useState(false);
   const [pauseReason, setPauseReason] =
     useState<SlaPauseReasonCode>("MERCHANT_ACCESS");
   const [pauseNote, setPauseNote] = useState("");
@@ -89,16 +92,59 @@ export function NearBreachModule() {
           reasonNote: pauseNote || undefined,
         }),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as { error?: string; ticket?: { slaPauses?: Array<{ approvalStatus: string }> } };
       if (!res.ok) {
         setError(data.error || "Gagal clock-stop");
         return;
       }
-      setMessage("Clock-stop diterapkan — tiket keluar dari antrian near-breach.");
+      const pending = data.ticket?.slaPauses?.some(
+        (p) => p.approvalStatus === "PENDING"
+      );
+      setMessage(
+        pending
+          ? "Permintaan clock-stop dikirim — menunggu approval Supervisor."
+          : "Clock-stop diterapkan — tiket keluar dari antrian near-breach."
+      );
       setPauseNote("");
       await load();
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function sendDigest(force = false) {
+    setDigestBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/ops/near-breach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "digest", force }),
+      });
+      const data = (await res.json()) as {
+        skipped?: boolean;
+        reason?: string;
+        dayKey?: string;
+        count?: number;
+        recipients?: string[];
+        error?: string;
+      };
+      if (!res.ok) {
+        setError(data.error || "Gagal kirim digest");
+        return;
+      }
+      if (data.skipped && data.reason === "already_sent") {
+        setMessage(
+          `Digest ${data.dayKey} sudah dikirim hari ini. Pakai “Kirim ulang” jika perlu.`
+        );
+        return;
+      }
+      setMessage(
+        `Digest ${data.dayKey} terkirim ke ${(data.recipients ?? []).join(", ") || "recipient"} · ${data.count ?? 0} tiket.`
+      );
+    } finally {
+      setDigestBusy(false);
     }
   }
 
@@ -109,6 +155,8 @@ export function NearBreachModule() {
       </p>
     );
   }
+
+  const sensitiveSelected = isSensitivePauseReason(pauseReason);
 
   return (
     <div className="flex flex-col gap-3">
@@ -129,6 +177,26 @@ export function NearBreachModule() {
             Tiket WARNING/BREACHED (clock berjalan) — realokasi teknisi sebelum
             deadline.
           </span>
+          <div className="ml-auto flex flex-wrap gap-1">
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              disabled={digestBusy}
+              onClick={() => void sendDigest(false)}
+            >
+              <Mail className="mr-1 h-3 w-3" /> Kirim digest
+            </Button>
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              disabled={digestBusy}
+              onClick={() => void sendDigest(true)}
+            >
+              Kirim ulang
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -152,6 +220,7 @@ export function NearBreachModule() {
               {SLA_PAUSE_REASON_CODES.map((c) => (
                 <option key={c} value={c}>
                   {SLA_PAUSE_REASON_LABELS[c]}
+                  {isSensitivePauseReason(c) ? " ★" : ""}
                 </option>
               ))}
             </select>
@@ -168,6 +237,11 @@ export function NearBreachModule() {
           <Button type="button" size="sm" variant="outline" onClick={() => void load()}>
             <RefreshCw className="mr-1 h-3.5 w-3.5" /> Refresh
           </Button>
+          {sensitiveSelected && !canApprove && (
+            <p className="w-full text-[11px] text-sla-warning">
+              Alasan ★ butuh approval Supervisor sebelum clock berhenti.
+            </p>
+          )}
         </div>
       )}
 

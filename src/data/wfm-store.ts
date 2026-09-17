@@ -130,7 +130,10 @@ export async function listWfmShifts(filter?: {
       ...(filter?.userId ? { userId: filter.userId } : {}),
       ...(filter?.shiftType
         ? { shiftType: filter.shiftType as PrismaShiftType }
-        : {}),
+        : {
+            /** Default WFM view excludes Liaison DOG shifts. */
+            shiftType: { in: ["MORNING", "AFTERNOON", "NIGHT"] },
+          }),
     },
     include: { user: true },
     orderBy: [{ shiftDate: "asc" }, { shiftType: "asc" }],

@@ -37,10 +37,12 @@ import {
   type OpsTicket,
 } from "@/lib/ticketing";
 import { AiInsightPanel } from "@/components/ai/ai-insight-panel";
+import { DispatchSuggestChips } from "@/components/ops/dispatch-module";
 import type { TicketCategory, TicketLocation } from "@/config/sla.config";
 import {
   SLA_PAUSE_REASON_CODES,
   SLA_PAUSE_REASON_LABELS,
+  isSensitivePauseReason,
   type SlaPauseReasonCode,
 } from "@/config/sla-pause.config";
 import { formatDateTime } from "@/lib/utils";
@@ -89,6 +91,7 @@ const ITSM_FILTERS: Array<ItsmType | "ALL"> = [
 export function TicketingModule() {
   const { user, can } = useAuth();
   const canPause = can("ticket:sla_pause");
+  const canApprovePause = can("ticket:sla_pause_approve");
   const [tickets, setTickets] = useState<OpsTicket[]>([]);
   const [olaPolicies, setOlaPolicies] = useState<OlaPolicy[] | null>(null);
   const [categories, setCategories] = useState<
@@ -283,8 +286,18 @@ export function TicketingModule() {
     return actor;
   }
 
-  async function handleSlaClock(action: "pause" | "resume") {
-    if (!selected || !canPause) return;
+  async function handleSlaClock(action: "pause" | "resume" | "approve" | "reject") {
+    if (!selected) return;
+    if (
+      (action === "pause" || action === "resume") &&
+      !canPause
+    )
+      return;
+    if (
+      (action === "approve" || action === "reject") &&
+      !canApprovePause
+    )
+      return;
     setClockBusy(true);
     setError(null);
     setMessage(null);
@@ -301,7 +314,13 @@ export function TicketingModule() {
                   reasonCode: pauseReason,
                   reasonNote: pauseNote || undefined,
                 }
-              : { action: "resume", note: pauseNote || undefined }
+              : action === "resume"
+                ? { action: "resume", note: pauseNote || undefined }
+                : {
+                    action,
+                    pauseId: selected.pendingPause?.id,
+                    note: pauseNote || undefined,
+                  }
           ),
         }
       );
@@ -317,8 +336,19 @@ export function TicketingModule() {
       } else {
         await loadTickets();
       }
+      const pendingAfter = data.ticket?.slaPauses?.some(
+        (p) => !p.endedAt && p.approvalStatus === "PENDING"
+      );
       setMessage(
-        action === "pause" ? "SLA clock di-stop." : "SLA clock dilanjutkan."
+        action === "pause"
+          ? pendingAfter
+            ? "Clock-stop diajukan — menunggu approval Supervisor."
+            : "SLA clock di-stop."
+          : action === "resume"
+            ? "SLA clock dilanjutkan."
+            : action === "approve"
+              ? "Clock-stop disetujui — timer berhenti."
+              : "Clock-stop ditolak — timer tetap berjalan."
       );
       setPauseNote("");
     } finally {
@@ -783,6 +813,7 @@ export function TicketingModule() {
             <p className="mt-1 font-mono text-[11px] text-muted-foreground">
               Masuk {formatDateTime(selected.openedAt)} · elapsed {selected.elapsedLabel}
               {selected.clockStopped ? " · CLOCK STOPPED" : ""}
+              {selected.pendingPause ? " · CLOCK-STOP PENDING APPROVAL" : ""}
               {selected.pausedMs > 0
                 ? ` · pause ${Math.round(selected.pausedMs / 60000)}m`
                 : ""}
@@ -793,11 +824,42 @@ export function TicketingModule() {
                 ? ` · OLA Disp ${OLA_STATUS_LABELS[selected.ola.dispatch.status]} (${selected.olaDispatchLabel})`
                 : ""}
             </p>
+            {selected.pendingPause && canApprovePause && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-sla-warning/30 bg-sla-warning/5 px-2 py-1.5">
+                <span className="text-[11px] text-muted-foreground">
+                  Pending:{" "}
+                  {SLA_PAUSE_REASON_LABELS[
+                    selected.pendingPause.reasonCode as SlaPauseReasonCode
+                  ] ?? selected.pendingPause.reasonCode}
+                  {selected.pendingPause.reasonNote
+                    ? ` — ${selected.pendingPause.reasonNote}`
+                    : ""}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={clockBusy}
+                  onClick={() => void handleSlaClock("approve")}
+                >
+                  Approve stop
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={clockBusy}
+                  onClick={() => void handleSlaClock("reject")}
+                >
+                  Tolak
+                </Button>
+              </div>
+            )}
             {canPause &&
               selected.status !== "CLOSED" &&
               selected.status !== "RESOLVED" && (
                 <div className="mt-2 flex flex-wrap items-end gap-2">
-                  {!selected.clockStopped && (
+                  {!selected.clockStopped && !selected.pendingPause && (
                     <select
                       className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                       value={pauseReason}
@@ -808,6 +870,7 @@ export function TicketingModule() {
                       {SLA_PAUSE_REASON_CODES.map((c) => (
                         <option key={c} value={c}>
                           {SLA_PAUSE_REASON_LABELS[c]}
+                          {isSensitivePauseReason(c) ? " ★" : ""}
                         </option>
                       ))}
                     </select>
@@ -816,7 +879,7 @@ export function TicketingModule() {
                     className="h-8 min-w-[160px] flex-1 rounded-md border border-input bg-background px-2 text-xs"
                     value={pauseNote}
                     onChange={(e) => setPauseNote(e.target.value)}
-                    placeholder="Catatan clock-stop / resume"
+                    placeholder="Catatan clock-stop / resume / approval"
                   />
                   {selected.clockStopped ? (
                     <Button
@@ -828,6 +891,10 @@ export function TicketingModule() {
                     >
                       Resume clock
                     </Button>
+                  ) : selected.pendingPause ? (
+                    <span className="text-[11px] text-sla-warning">
+                      Menunggu approval Supervisor
+                    </span>
                   ) : (
                     <Button
                       type="button"
@@ -1014,6 +1081,10 @@ function TicketActions({
           onChange={(e) => setTechnicianName(e.target.value)}
           placeholder="Teknisi lapangan"
           disabled={!selected}
+        />
+        <DispatchSuggestChips
+          ticketId={selected?.id}
+          onPick={setTechnicianName}
         />
       </Field>
 

@@ -7,6 +7,7 @@ export const INTEGRATION_SCOPES = [
   "tickets:read",
   "tickets:write",
   "tickets:events",
+  "monitoring:ingest",
 ] as const;
 
 export type IntegrationScope = (typeof INTEGRATION_SCOPES)[number];
@@ -46,5 +47,14 @@ export const INTEGRATION_CLIENT_SEED: Omit<
     scopes: ["tickets:read"],
     isActive: true,
     externalSystem: "reporting",
+  },
+  {
+    id: "int-monitoring",
+    name: "EDC Uptime Monitor",
+    keyId: "edc_sdk_monitor",
+    apiKey: "edc_sk_demo_monitoring_change_me",
+    scopes: ["monitoring:ingest", "tickets:read"],
+    isActive: true,
+    externalSystem: "uptime-monitor",
   },
 ];

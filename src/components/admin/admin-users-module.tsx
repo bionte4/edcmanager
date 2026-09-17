@@ -38,6 +38,7 @@ const ROLES: AppRole[] = [
   "OPS_MANAGER",
   "SUPERVISOR",
   "NOC",
+  "LIAISON",
   "VENDOR_TECH",
 ];
 

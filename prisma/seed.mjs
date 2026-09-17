@@ -177,6 +177,11 @@ async function main() {
     ["u-ops-1", "Rudi Hartono", "rudi.ops@edc.local", null, "OPS_MANAGER"],
     ["u-gm-1", "Hendra Wijaya", "hendra.gm@edc.local", "0812-9999-0001", "GM"],
     ["u-tech-1", "Eko Teknisi", "eko.tech@edc.local", null, "VENDOR_TECH"],
+    ["u-tech-2", "Rina Teknisi", "rina.tech@edc.local", "0812-4444-0002", "VENDOR_TECH"],
+    ["u-tech-3", "Agus Teknisi", "agus.tech@edc.local", "0812-4444-0003", "VENDOR_TECH"],
+    ["u-tech-4", "Maya Teknisi", "maya.tech@edc.local", "0812-4444-0004", "VENDOR_TECH"],
+    ["u-lo-1", "Farah Liaison", "farah.lo@edc.local", "0812-3333-0001", "LIAISON"],
+    ["u-lo-2", "Gilang Liaison", "gilang.lo@edc.local", "0812-3333-0002", "LIAISON"],
   ];
   for (const [id, name, email, phone, role] of users) {
     await prisma.user.upsert({
@@ -340,6 +345,8 @@ async function main() {
     ["s3", "u-sup-1", "MORNING"],
     ["s4", "u-noc-3", "AFTERNOON"],
     ["s5", "u-noc-1", "NIGHT"],
+    ["s-lo-1", "u-lo-1", "DAY_DOG"],
+    ["s-lo-2", "u-lo-2", "NIGHT_DOG"],
   ];
   for (const [id, userId, shiftType] of shifts) {
     await prisma.nocShift.upsert({
@@ -348,6 +355,22 @@ async function main() {
       },
       update: { status: "SCHEDULED" },
       create: { id, userId, shiftDate, shiftType, status: "SCHEDULED" },
+    });
+  }
+
+  // Sample LO handover for demo date
+  if ((await prisma.handoverLog.count()) === 0) {
+    await prisma.handoverLog.create({
+      data: {
+        shiftDate,
+        fromShiftType: "DAY_DOG",
+        toShiftType: "NIGHT_DOG",
+        fromUserId: "u-lo-1",
+        toUserId: "u-lo-2",
+        summary:
+          "Handover DOG: pantau VIP Dalam Kota yang mendekati SLA; koordinasi BRI hold merchant MID-102938.",
+        openTickets: ["INC-2026-8841"],
+      },
     });
   }
 
@@ -492,6 +515,39 @@ async function main() {
       scopes: "tickets:read,tickets:write",
       externalSystem: "demo-external",
       isActive: true,
+    },
+  });
+
+  await prisma.integrationClient.upsert({
+    where: { apiKey: "edc_sk_demo_monitoring_change_me" },
+    update: {
+      isActive: true,
+      scopes: "monitoring:ingest,tickets:read",
+      externalSystem: "uptime-monitor",
+      name: "EDC Uptime Monitor",
+    },
+    create: {
+      id: "ic-monitor-1",
+      name: "EDC Uptime Monitor",
+      apiKey: "edc_sk_demo_monitoring_change_me",
+      scopes: "monitoring:ingest,tickets:read",
+      externalSystem: "uptime-monitor",
+      isActive: true,
+    },
+  });
+
+  // Sample PM campaign run marker (tickets generated on demand via UI/cron)
+  await prisma.pmCampaignRun.upsert({
+    where: {
+      kind_periodKey: { kind: "PM_MONTHLY", periodKey: "2026-09" },
+    },
+    update: {},
+    create: {
+      kind: "PM_MONTHLY",
+      periodKey: "2026-09",
+      status: "DONE",
+      ticketCount: 0,
+      metaJson: JSON.stringify({ note: "Seed placeholder — generate via /ops/campaigns" }),
     },
   });
 

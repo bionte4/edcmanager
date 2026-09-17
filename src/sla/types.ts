@@ -31,6 +31,11 @@ export interface SlaPauseInterval {
   startedAt: Date;
   endedAt?: Date | null;
   reasonCode?: string;
+  /**
+   * PENDING/REJECTED do not stop the clock or exclude elapsed time.
+   * Omit / NOT_REQUIRED / APPROVED count toward SLA pause.
+   */
+  approvalStatus?: "NOT_REQUIRED" | "PENDING" | "APPROVED" | "REJECTED";
 }
 
 export interface ResolutionDuration {

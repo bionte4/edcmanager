@@ -13,8 +13,12 @@ export const PERMISSIONS = [
   "ticket:assign",
   "ticket:close",
   "ticket:sla_pause",
+  "ticket:sla_pause_approve",
   "noc:read",
   "noc:manage_shift",
+  "liaison:read",
+  "liaison:handover",
+  "liaison:escalate",
   "wfm:read",
   "wfm:approve",
   "inventory:read",
@@ -46,7 +50,8 @@ export type AppRole =
   | "SUPERVISOR"
   | "VENDOR_TECH"
   | "OPS_MANAGER"
-  | "GM";
+  | "GM"
+  | "LIAISON";
 
 const ALL: Permission[] = [...PERMISSIONS];
 
@@ -58,6 +63,7 @@ const ALL: Permission[] = [...PERMISSIONS];
  * | OPS_MANAGER  | Dasbor, Tiket, Inventori, Pelaporan + Executive/Config |
  * | SUPERVISOR   | Dasbor, Tiket, Workforce, Inventori |
  * | NOC (L1)     | Dasbor, Tiket, Workforce (tab NOC) · notif di header |
+ * | LIAISON (LO) | Dasbor, Tiket, Workforce (LO/Handover/Inbox) |
  * | VENDOR_TECH  | Dasbor, Tiket, Inventori |
  *
  * Hubs: /inventory · /workforce · /config · /vendors — tab di dalamnya tetap RBAC per modul CRUD.
@@ -82,6 +88,10 @@ export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
     "ticket:assign",
     "ticket:close",
     "ticket:sla_pause",
+    "ticket:sla_pause_approve",
+    "liaison:read",
+    "liaison:handover",
+    "liaison:escalate",
     "wfm:read",
     "wfm:approve",
     "inventory:read",
@@ -108,8 +118,12 @@ export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
     "ticket:assign",
     "ticket:close",
     "ticket:sla_pause",
+    "ticket:sla_pause_approve",
     "noc:read",
     "noc:manage_shift",
+    "liaison:read",
+    "liaison:handover",
+    "liaison:escalate",
     "wfm:read",
     "wfm:approve",
     "inventory:read",
@@ -131,10 +145,25 @@ export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
     "ticket:assign",
     "ticket:sla_pause",
     "noc:read",
+    "liaison:escalate",
     "vendor:read",
     "notification:read",
     "category:read",
     "location:read",
+  ],
+  LIAISON: [
+    "dashboard:read",
+    "ticket:read",
+    "ticket:update",
+    "ticket:assign",
+    "ticket:sla_pause",
+    "liaison:read",
+    "liaison:handover",
+    "liaison:escalate",
+    "notification:read",
+    "category:read",
+    "location:read",
+    "vendor:read",
   ],
   VENDOR_TECH: [
     "dashboard:read",
@@ -154,6 +183,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   VENDOR_TECH: "Vendor Tech",
   OPS_MANAGER: "Ops Manager",
   GM: "GM / BOD",
+  LIAISON: "Liaison LO",
 };
 
 /** Page path prefix → required permission (first match wins). */
@@ -180,6 +210,10 @@ export const ROUTE_PERMISSIONS: Array<{
   { prefix: "/ticketing", permission: "ticket:read" },
   { prefix: "/ops/near-breach", permission: "ticket:read" },
   { prefix: "/api/ops/near-breach", permission: "ticket:read" },
+  { prefix: "/ops/campaigns", permission: "ticket:read" },
+  { prefix: "/api/ops/campaigns", permission: "ticket:read" },
+  { prefix: "/ops/dispatch", permission: "ticket:read" },
+  { prefix: "/api/ops/dispatch", permission: "ticket:read" },
   { prefix: "/reporting", permission: "report:read" },
   { prefix: "/api/reporting", permission: "report:read" },
   { prefix: "/executive", permission: "executive:read" },
@@ -190,7 +224,11 @@ export const ROUTE_PERMISSIONS: Array<{
   { prefix: "/api/categories", permission: "category:read" },
   { prefix: "/locations", permission: "location:read" },
   { prefix: "/api/locations", permission: "location:read" },
-  { prefix: "/workforce", anyOf: ["noc:read", "wfm:read"] },
+  {
+    prefix: "/workforce",
+    anyOf: ["noc:read", "wfm:read", "liaison:read", "liaison:escalate"],
+  },
+  { prefix: "/api/liaison", anyOf: ["liaison:read", "liaison:escalate"] },
   { prefix: "/wfm", permission: "wfm:read" },
   { prefix: "/api/wfm", permission: "wfm:read" },
   { prefix: "/noc", permission: "noc:read" },

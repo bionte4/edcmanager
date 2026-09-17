@@ -11,6 +11,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { computeSlaDeadline, evaluateSlaStatus } from "@/sla";
 import {
+  isSensitivePauseReason,
   isSlaPauseReasonCode,
   SLA_PAUSE_REASON_LABELS,
   type SlaPauseReasonCode,
@@ -20,6 +21,7 @@ import type { ItsmType, OperationalProcess } from "@/config/itsm.config";
 import type { TicketCategory, TicketLocation } from "@/config/sla.config";
 import type {
   Prisma,
+  SlaPauseApprovalStatus,
   SlaPauseInterval,
   Ticket,
   TicketActivity,
@@ -46,7 +48,7 @@ const ticketInclude = {
     orderBy: { createdAt: "desc" as const },
   },
   slaPauses: {
-    include: { startedBy: true, endedBy: true },
+    include: { startedBy: true, endedBy: true, approvedBy: true },
     orderBy: { startedAt: "asc" as const },
   },
 } satisfies Prisma.TicketInclude;
@@ -59,6 +61,7 @@ type TicketWithRelations = Ticket & {
   slaPauses: (SlaPauseInterval & {
     startedBy: User | null;
     endedBy: User | null;
+    approvedBy: User | null;
   })[];
 };
 
@@ -77,7 +80,11 @@ function mapActivity(
 }
 
 function mapPause(
-  row: SlaPauseInterval & { startedBy: User | null; endedBy: User | null }
+  row: SlaPauseInterval & {
+    startedBy: User | null;
+    endedBy: User | null;
+    approvedBy: User | null;
+  }
 ): SlaPauseRow {
   return {
     id: row.id,
@@ -87,7 +94,42 @@ function mapPause(
     endedAt: row.endedAt?.toISOString() ?? null,
     startedByName: row.startedBy?.name,
     endedByName: row.endedBy?.name,
+    approvalStatus: row.approvalStatus as SlaPauseRow["approvalStatus"],
+    approvedByName: row.approvedBy?.name,
+    approvedAt: row.approvedAt?.toISOString() ?? null,
+    rejectionNote: row.rejectionNote ?? undefined,
   };
+}
+
+function toEvalPauses(pauses: SlaPauseRow[]) {
+  return pauses.map((p) => ({
+    startedAt: new Date(p.startedAt),
+    endedAt: p.endedAt ? new Date(p.endedAt) : null,
+    reasonCode: p.reasonCode,
+    approvalStatus: p.approvalStatus,
+  }));
+}
+
+async function syncTicketSla(mapped: OpsTicket) {
+  const evaled = evaluateSlaStatus(
+    {
+      location: mapped.location,
+      category: mapped.category,
+      itsmType: mapped.itsmType,
+      openedAt: new Date(mapped.openedAt),
+      closedAt: mapped.closedAt ? new Date(mapped.closedAt) : null,
+      pauseIntervals: toEvalPauses(mapped.slaPauses ?? []),
+    },
+    new Date()
+  );
+  await prisma.ticket.update({
+    where: { id: mapped.id },
+    data: {
+      slaStatus: evaled.status,
+      slaDeadlineAt: evaled.deadlineAt,
+    },
+  });
+  return evaled;
 }
 
 function mapTicket(row: TicketWithRelations): OpsTicket {
@@ -220,6 +262,7 @@ export async function createIntegrationTicket(input: {
   externalTicketId: string;
   externalSystem: string;
   openedAt?: string;
+  edcUnitId?: string | null;
 }): Promise<OpsTicket> {
   const externalTicketId = input.externalTicketId.trim();
   const externalSystem = input.externalSystem.trim();
@@ -277,6 +320,7 @@ export async function createIntegrationTicket(input: {
       externalTicketId: draft.externalTicketId,
       externalSystem: draft.externalSystem,
       vendorId,
+      edcUnitId: input.edcUnitId?.trim() || null,
       activities: {
         create: draft.activities.map((a) => ({
           activityType: a.type as TicketActivityType,
@@ -466,6 +510,8 @@ export async function pauseSlaClock(
     reasonCode: string;
     reasonNote?: string;
     actor: NocUser;
+    /** Supervisor/Ops: sensitive reasons apply immediately as APPROVED. */
+    autoApprove?: boolean;
   }
 ): Promise<OpsTicket> {
   const row = await findTicketRow(ticketId);
@@ -479,14 +525,40 @@ export async function pauseSlaClock(
     throw new Error("Catatan wajib untuk alasan Lainnya.");
   }
 
-  const open = row.slaPauses.find((p) => p.endedAt == null);
-  if (open) throw new Error("SLA clock sudah di-stop. Resume dulu sebelum pause lagi.");
+  const active = row.slaPauses.find(
+    (p) =>
+      p.endedAt == null &&
+      (p.approvalStatus === "NOT_REQUIRED" || p.approvalStatus === "APPROVED")
+  );
+  if (active) throw new Error("SLA clock sudah di-stop. Resume dulu sebelum pause lagi.");
+
+  const pending = row.slaPauses.find(
+    (p) => p.endedAt == null && p.approvalStatus === "PENDING"
+  );
+  if (pending) {
+    throw new Error("Sudah ada permintaan clock-stop menunggu approval Supervisor.");
+  }
+
+  const sensitive = isSensitivePauseReason(reasonCode);
+  const needsApproval = sensitive && !input.autoApprove;
+  const approvalStatus: SlaPauseApprovalStatus = needsApproval
+    ? "PENDING"
+    : sensitive
+      ? "APPROVED"
+      : "NOT_REQUIRED";
 
   const label = SLA_PAUSE_REASON_LABELS[reasonCode];
-  const note = input.reasonNote?.trim()
-    ? `Clock-stop: ${label} — ${input.reasonNote.trim()}`
-    : `Clock-stop: ${label}`;
+  const noteBase = input.reasonNote?.trim()
+    ? `${label} — ${input.reasonNote.trim()}`
+    : label;
+  const activityType: TicketActivityType = needsApproval
+    ? "CLOCK_STOP_REQUESTED"
+    : "CLOCK_STOPPED";
+  const note = needsApproval
+    ? `Clock-stop diajukan (menunggu approval): ${noteBase}`
+    : `Clock-stop: ${noteBase}`;
 
+  const now = new Date();
   const updated = await prisma.ticket.update({
     where: { id: row.id },
     data: {
@@ -495,11 +567,14 @@ export async function pauseSlaClock(
           reasonCode,
           reasonNote: input.reasonNote?.trim() || null,
           startedById: input.actor.id,
+          approvalStatus,
+          approvedById: approvalStatus === "APPROVED" ? input.actor.id : null,
+          approvedAt: approvalStatus === "APPROVED" ? now : null,
         },
       },
       activities: {
         create: {
-          activityType: "CLOCK_STOPPED",
+          activityType,
           note,
           actorId: input.actor.id,
         },
@@ -509,29 +584,129 @@ export async function pauseSlaClock(
   });
 
   const mapped = mapTicket(updated);
-  const evaled = evaluateSlaStatus(
-    {
-      location: mapped.location,
-      category: mapped.category,
-      itsmType: mapped.itsmType,
-      openedAt: new Date(mapped.openedAt),
-      closedAt: null,
-      pauseIntervals: (mapped.slaPauses ?? []).map((p) => ({
-        startedAt: new Date(p.startedAt),
-        endedAt: p.endedAt ? new Date(p.endedAt) : null,
-      })),
-    },
-    new Date()
+  await syncTicketSla(mapped);
+  return mapped;
+}
+
+export async function approveSlaPause(
+  ticketId: string,
+  input: { actor: NocUser; pauseId?: string; note?: string }
+): Promise<OpsTicket> {
+  const row = await findTicketRow(ticketId);
+  if (!row) throw Object.assign(new Error("Ticket not found"), { status: 404 });
+
+  const pending =
+    (input.pauseId
+      ? row.slaPauses.find((p) => p.id === input.pauseId)
+      : null) ??
+    row.slaPauses.find(
+      (p) => p.endedAt == null && p.approvalStatus === "PENDING"
+    );
+  if (!pending || pending.approvalStatus !== "PENDING") {
+    throw new Error("Tidak ada permintaan clock-stop yang menunggu approval.");
+  }
+
+  const active = row.slaPauses.find(
+    (p) =>
+      p.id !== pending.id &&
+      p.endedAt == null &&
+      (p.approvalStatus === "NOT_REQUIRED" || p.approvalStatus === "APPROVED")
   );
-  await prisma.ticket.update({
-    where: { id: row.id },
+  if (active) {
+    throw new Error("Tidak bisa approve — clock sudah di-stop pada interval lain.");
+  }
+
+  const now = new Date();
+  const label =
+    SLA_PAUSE_REASON_LABELS[pending.reasonCode as SlaPauseReasonCode] ??
+    pending.reasonCode;
+  const note = input.note?.trim()
+    ? `Clock-stop disetujui: ${label} — ${input.note.trim()}`
+    : `Clock-stop disetujui: ${label}`;
+
+  await prisma.slaPauseInterval.update({
+    where: { id: pending.id },
     data: {
-      slaStatus: evaled.status,
-      slaDeadlineAt: evaled.deadlineAt,
+      approvalStatus: "APPROVED",
+      approvedById: input.actor.id,
+      approvedAt: now,
+      startedAt: now,
     },
   });
 
-  return mapTicket(updated);
+  const updated = await prisma.ticket.update({
+    where: { id: row.id },
+    data: {
+      activities: {
+        create: {
+          activityType: "CLOCK_STOP_APPROVED",
+          note,
+          actorId: input.actor.id,
+        },
+      },
+    },
+    include: ticketInclude,
+  });
+
+  const mapped = mapTicket(updated);
+  await syncTicketSla(mapped);
+  return mapped;
+}
+
+export async function rejectSlaPause(
+  ticketId: string,
+  input: { actor: NocUser; pauseId?: string; note?: string }
+): Promise<OpsTicket> {
+  const row = await findTicketRow(ticketId);
+  if (!row) throw Object.assign(new Error("Ticket not found"), { status: 404 });
+
+  const pending =
+    (input.pauseId
+      ? row.slaPauses.find((p) => p.id === input.pauseId)
+      : null) ??
+    row.slaPauses.find(
+      (p) => p.endedAt == null && p.approvalStatus === "PENDING"
+    );
+  if (!pending || pending.approvalStatus !== "PENDING") {
+    throw new Error("Tidak ada permintaan clock-stop yang menunggu approval.");
+  }
+
+  const now = new Date();
+  const label =
+    SLA_PAUSE_REASON_LABELS[pending.reasonCode as SlaPauseReasonCode] ??
+    pending.reasonCode;
+  const rejectionNote = input.note?.trim() || "Ditolak Supervisor";
+  const note = `Clock-stop ditolak: ${label} — ${rejectionNote}`;
+
+  await prisma.slaPauseInterval.update({
+    where: { id: pending.id },
+    data: {
+      approvalStatus: "REJECTED",
+      approvedById: input.actor.id,
+      approvedAt: now,
+      endedAt: now,
+      endedById: input.actor.id,
+      rejectionNote,
+    },
+  });
+
+  const updated = await prisma.ticket.update({
+    where: { id: row.id },
+    data: {
+      activities: {
+        create: {
+          activityType: "CLOCK_STOP_REJECTED",
+          note,
+          actorId: input.actor.id,
+        },
+      },
+    },
+    include: ticketInclude,
+  });
+
+  const mapped = mapTicket(updated);
+  await syncTicketSla(mapped);
+  return mapped;
 }
 
 export async function resumeSlaClock(
@@ -541,7 +716,11 @@ export async function resumeSlaClock(
   const row = await findTicketRow(ticketId);
   if (!row) throw Object.assign(new Error("Ticket not found"), { status: 404 });
 
-  const open = row.slaPauses.find((p) => p.endedAt == null);
+  const open = row.slaPauses.find(
+    (p) =>
+      p.endedAt == null &&
+      (p.approvalStatus === "NOT_REQUIRED" || p.approvalStatus === "APPROVED")
+  );
   if (!open) throw new Error("Tidak ada clock-stop aktif pada tiket ini.");
 
   const now = new Date();
@@ -569,36 +748,39 @@ export async function resumeSlaClock(
   });
 
   const mapped = mapTicket(updated);
-  const evaled = evaluateSlaStatus(
-    {
-      location: mapped.location,
-      category: mapped.category,
-      itsmType: mapped.itsmType,
-      openedAt: new Date(mapped.openedAt),
-      closedAt: mapped.closedAt ? new Date(mapped.closedAt) : null,
-      pauseIntervals: (mapped.slaPauses ?? []).map((p) => ({
-        startedAt: new Date(p.startedAt),
-        endedAt: p.endedAt ? new Date(p.endedAt) : null,
-      })),
-    },
-    now
-  );
-  await prisma.ticket.update({
+  await syncTicketSla(mapped);
+  return mapped;
+}
+
+export async function escalateTicketToLiaison(
+  ticketId: string,
+  input: { actor: NocUser; note?: string }
+): Promise<OpsTicket> {
+  const row = await findTicketRow(ticketId);
+  if (!row) throw Object.assign(new Error("Ticket not found"), { status: 404 });
+  if (row.status === "CLOSED" || row.status === "RESOLVED") {
+    throw new Error("Tiket sudah selesai — tidak bisa dieskalasi.");
+  }
+
+  const note = input.note?.trim()
+    ? `Eskalasi ke Liaison LO — ${input.note.trim()}`
+    : "Eskalasi ke Liaison LO (DOG)";
+
+  const updated = await prisma.ticket.update({
     where: { id: row.id },
     data: {
-      slaStatus: evaled.status,
-      slaDeadlineAt: computeSlaDeadline(
-        mapped.location,
-        mapped.category,
-        new Date(mapped.openedAt),
-        mapped.itsmType,
-        evaled.pausedMs
-      ),
+      activities: {
+        create: {
+          activityType: "ESCALATED",
+          note,
+          actorId: input.actor.id,
+        },
+      },
     },
+    include: ticketInclude,
   });
 
-  const refreshed = await findTicketRow(row.id);
-  return mapTicket(refreshed!);
+  return mapTicket(updated);
 }
 
 /** Open tickets at WARNING/BREACHED for 16:00 near-breach audit (excludes clock-stopped). */
@@ -636,6 +818,8 @@ export async function listNearBreachTickets(asOf = new Date()): Promise<
             pauseIntervals: (t.slaPauses ?? []).map((p) => ({
               startedAt: new Date(p.startedAt),
               endedAt: p.endedAt ? new Date(p.endedAt) : null,
+              reasonCode: p.reasonCode,
+              approvalStatus: p.approvalStatus,
             })),
           },
           asOf

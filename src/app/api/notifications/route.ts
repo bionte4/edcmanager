@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { listNotifications } from "@/data/notifications-store";
+import { listNearBreachTickets } from "@/data/tickets-store";
 import {
+  notifyNearBreachDigest,
   notifySlaEscalation,
   notifyTest,
   notifyTicketAssigned,
@@ -42,19 +44,49 @@ export async function POST(request: Request) {
   try {
     await requireSession();
     const body = (await request.json()) as {
-      action?: "assign" | "sla" | "test";
+      action?: "assign" | "sla" | "test" | "near_breach_digest";
       level?: "WARNING" | "BREACHED";
       to?: string;
+      force?: boolean;
       ticket?: NotifyTicketPayload;
     };
 
     if (body.action === "test") {
       const record = await notifyTest(body.to);
-      return NextResponse.json({ notification: record, smtpConfigured: isSmtpConfigured() });
+      return NextResponse.json({
+        notification: record,
+        smtpConfigured: isSmtpConfigured(),
+      });
+    }
+
+    if (body.action === "near_breach_digest") {
+      const asOf = new Date();
+      const tickets = await listNearBreachTickets(asOf);
+      const result = await notifyNearBreachDigest({
+        rows: tickets.map((t) => ({
+          ticketNumber: t.ticketNumber,
+          merchantId: t.merchantId,
+          location: t.location,
+          category: t.category,
+          vendorName: t.vendorName,
+          slaStatus: t.slaStatus,
+          elapsedLabel: t.elapsedLabel,
+          remainingLabel: t.remainingLabel,
+          elapsedRatio: t.elapsedRatio,
+          technicianName: t.technicianName,
+        })),
+        asOf,
+        force: !!body.force,
+        to: body.to,
+      });
+      return NextResponse.json({ ...result, smtpConfigured: isSmtpConfigured() });
     }
 
     if (!body.ticket?.ticketNumber) {
-      return NextResponse.json({ error: "ticket payload required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "ticket payload required" },
+        { status: 400 }
+      );
     }
 
     if (body.action === "assign") {

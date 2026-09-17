@@ -23,7 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/components/auth/auth-provider";
-import { NOC_SHIFT_WINDOWS, type NocShiftType } from "@/config/noc.config";
+import { NOC_SHIFT_WINDOWS, shiftTypeLabel, type NocShiftType } from "@/config/noc.config";
 import {
   ATTENDANCE_STATUS_LABELS,
   SWAP_STATUS_LABELS,
@@ -555,7 +555,7 @@ export function WfmModule() {
                 <TableRow key={s.id}>
                   <TableCell className="font-mono text-[11px]">{s.shiftDate}</TableCell>
                   <TableCell className="text-xs">
-                    {NOC_SHIFT_WINDOWS[s.shiftType].label}
+                    {shiftTypeLabel(s.shiftType)}
                   </TableCell>
                   <TableCell className="text-xs font-medium">{s.userName}</TableCell>
                   <TableCell className="text-[11px]">

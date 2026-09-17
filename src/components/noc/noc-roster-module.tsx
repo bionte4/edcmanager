@@ -14,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/components/auth/auth-provider";
-import { NOC_SHIFT_WINDOWS, type NocShiftType } from "@/config/noc.config";
+import { NOC_SHIFT_WINDOWS, shiftTypeLabel, type NocShiftType } from "@/config/noc.config";
 import { ROLE_LABELS, SHIFT_STATUS_LABELS } from "@/data/noc";
 import type { NocShiftRow, ShiftDutyStatus } from "@/lib/ticketing";
 import { cn } from "@/lib/utils";
@@ -176,7 +176,7 @@ export function NocRosterModule() {
                 </TableCell>
                 <TableCell className="font-mono text-[11px]">{shift.shiftDate}</TableCell>
                 <TableCell className="text-xs">
-                  {NOC_SHIFT_WINDOWS[shift.shiftType].label}
+                  {shiftTypeLabel(shift.shiftType)}
                 </TableCell>
                 <TableCell>
                   <Badge variant={dutyBadge(shift.status)}>

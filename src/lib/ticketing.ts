@@ -45,8 +45,14 @@ export type UserRole =
   | "SUPERVISOR"
   | "VENDOR_TECH"
   | "OPS_MANAGER"
-  | "GM";
-export type ShiftType = "MORNING" | "AFTERNOON" | "NIGHT";
+  | "GM"
+  | "LIAISON";
+export type ShiftType =
+  | "MORNING"
+  | "AFTERNOON"
+  | "NIGHT"
+  | "DAY_DOG"
+  | "NIGHT_DOG";
 export type ShiftDutyStatus = "SCHEDULED" | "ON_DUTY" | "OFF_DUTY";
 export type TicketActivityType =
   | "CREATED"
@@ -59,7 +65,10 @@ export type TicketActivityType =
   | "CLOSED"
   | "HANDOVER"
   | "CLOCK_STOPPED"
-  | "CLOCK_RESUMED";
+  | "CLOCK_RESUMED"
+  | "CLOCK_STOP_REQUESTED"
+  | "CLOCK_STOP_APPROVED"
+  | "CLOCK_STOP_REJECTED";
 
 export interface NocUser {
   id: string;
@@ -99,6 +108,10 @@ export interface SlaPauseRow {
   endedAt?: string | null;
   startedByName?: string;
   endedByName?: string;
+  approvalStatus?: "NOT_REQUIRED" | "PENDING" | "APPROVED" | "REJECTED";
+  approvedByName?: string;
+  approvedAt?: string | null;
+  rejectionNote?: string;
 }
 
 export interface OpsTicket {
@@ -311,6 +324,7 @@ export function enrichOpsTicket(
     startedAt: new Date(p.startedAt),
     endedAt: p.endedAt ? new Date(p.endedAt) : null,
     reasonCode: p.reasonCode,
+    approvalStatus: p.approvalStatus ?? "NOT_REQUIRED",
   }));
 
   const evaluation = evaluateSlaStatus(
@@ -331,6 +345,11 @@ export function enrichOpsTicket(
     ticket.itsmType,
     evaluation.pausedMs
   );
+
+  const pendingPause =
+    (ticket.slaPauses ?? []).find(
+      (p) => !p.endedAt && (p.approvalStatus ?? "NOT_REQUIRED") === "PENDING"
+    ) ?? null;
 
   const ola: TicketOlaBundle = evaluateTicketOla(
     {
@@ -361,6 +380,7 @@ export function enrichOpsTicket(
     deadlineAt: deadline.toISOString(),
     pausedMs: evaluation.pausedMs,
     clockStopped: evaluation.clockStopped,
+    pendingPause,
     needsEscalation:
       !evaluation.clockStopped &&
       (evaluation.status === "WARNING" || evaluation.status === "BREACHED"),

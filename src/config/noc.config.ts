@@ -10,6 +10,16 @@ export const NOC_SHIFT_WINDOWS = {
 
 export type NocShiftType = keyof typeof NOC_SHIFT_WINDOWS;
 
+/** Label for any roster shift type (NOC 3-shift or LO DOG). */
+export function shiftTypeLabel(shiftType: string): string {
+  if (shiftType in NOC_SHIFT_WINDOWS) {
+    return NOC_SHIFT_WINDOWS[shiftType as NocShiftType].label;
+  }
+  if (shiftType === "DAY_DOG") return "DOG Siang";
+  if (shiftType === "NIGHT_DOG") return "DOG Malam";
+  return shiftType;
+}
+
 /** Allowed ticket status transitions for NOC workflow. */
 export const TICKET_STATUS_TRANSITIONS = {
   OPEN: ["ACKNOWLEDGED", "CLOSED"],

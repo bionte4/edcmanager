@@ -9,6 +9,7 @@ import {
   type ConnectorStatusPayload,
 } from "@/components/integration/connector-cards";
 import { IntegrationClientsCrud } from "@/components/integration/integration-clients-crud";
+import { MonitoringIngestPanel } from "@/components/integration/monitoring-ingest-panel";
 import { cn } from "@/lib/utils";
 
 const ENDPOINTS = [
@@ -41,6 +42,12 @@ const ENDPOINTS = [
     path: "/api/v1/tickets/:id/events",
     scope: "tickets:events",
     desc: "Append activity note",
+  },
+  {
+    method: "POST",
+    path: "/api/v1/monitoring/events",
+    scope: "monitoring:ingest",
+    desc: "Monitoring webhook → auto-create INCIDENT (CRITICAL/MAJOR)",
   },
 ] as const;
 
@@ -78,6 +85,8 @@ export function IntegrationHub() {
         apiDocsOpen={showApiDocs}
         onToggleApiDocs={() => setShowApiDocs((v) => !v)}
       />
+
+      <MonitoringIngestPanel />
 
       {canManage && <IntegrationClientsCrud onChanged={() => void loadStatus()} />}
 

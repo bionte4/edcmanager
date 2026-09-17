@@ -308,6 +308,7 @@ export const ROLE_LABELS: Record<NocUser["role"], string> = {
   VENDOR_TECH: "Vendor Tech",
   OPS_MANAGER: "Ops Manager",
   GM: "GM / BOD",
+  LIAISON: "Liaison LO",
 };
 
 export const SHIFT_STATUS_LABELS: Record<NocShiftRow["status"], string> = {

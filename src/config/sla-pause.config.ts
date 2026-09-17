@@ -31,6 +31,34 @@ export const SLA_PAUSE_REASON_LABELS: Record<SlaPauseReasonCode, string> = {
   OTHER: "Lainnya (wajib catatan)",
 };
 
+/**
+ * Sensitive reasons require Supervisor/Ops approval before the SLA clock stops.
+ * Non-listed codes apply immediately (NOT_REQUIRED).
+ */
+export const SENSITIVE_PAUSE_REASON_CODES: readonly SlaPauseReasonCode[] = [
+  "FORCE_MAJEURE",
+  "BRI_HOLD",
+  "NETWORK_MASS_OUTAGE",
+  "OTHER",
+];
+
 export function isSlaPauseReasonCode(v: string): v is SlaPauseReasonCode {
   return (SLA_PAUSE_REASON_CODES as readonly string[]).includes(v);
+}
+
+export function isSensitivePauseReason(code: SlaPauseReasonCode): boolean {
+  return (SENSITIVE_PAUSE_REASON_CODES as readonly string[]).includes(code);
+}
+
+export type SlaPauseApprovalStatus =
+  | "NOT_REQUIRED"
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED";
+
+/** Only these statuses exclude elapsed time / stop the clock. */
+export function pauseCountsTowardSla(
+  status: SlaPauseApprovalStatus | string | null | undefined
+): boolean {
+  return status === "NOT_REQUIRED" || status === "APPROVED" || status == null;
 }

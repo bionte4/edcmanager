@@ -88,12 +88,17 @@ enum UserRole {
   VENDOR_TECH
   OPS_MANAGER
   GM
+  LIAISON
 }
 
 enum ShiftType {
   MORNING
   AFTERNOON
   NIGHT
+  /// Liaison LO — DOG day shift
+  DAY_DOG
+  /// Liaison LO — DOG night shift
+  NIGHT_DOG
 }
 
 enum ShiftDutyStatus {
@@ -114,6 +119,16 @@ enum TicketActivityType {
   HANDOVER
   CLOCK_STOPPED
   CLOCK_RESUMED
+  CLOCK_STOP_REQUESTED
+  CLOCK_STOP_APPROVED
+  CLOCK_STOP_REJECTED
+}
+
+enum SlaPauseApprovalStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 // ─── User (NOC / Supervisor / Tech) ──────────────────────────────────────────
@@ -140,6 +155,9 @@ model User {
   auditLogs           AuditLog[]
   slaPausesStarted    SlaPauseInterval[] @relation("SlaPauseStartedBy")
   slaPausesEnded      SlaPauseInterval[] @relation("SlaPauseEndedBy")
+  slaPausesApproved   SlaPauseInterval[] @relation("SlaPauseApprovedBy")
+  handoversFrom       HandoverLog[]      @relation("HandoverFrom")
+  handoversTo         HandoverLog[]      @relation("HandoverTo")
 
   @@index([role])
   @@index([isActive])
@@ -211,6 +229,30 @@ model NocShift {
   @@index([shiftDate, status])
   @@index([status])
   @@map("noc_shifts")
+}
+
+/// Liaison LO shift handover (DOG day ↔ night).
+model HandoverLog {
+  id            String    @id @default(cuid())
+  shiftDate     DateTime  @db.Date
+  fromShiftType ShiftType
+  toShiftType   ShiftType
+  fromUserId    String
+  toUserId      String?
+  summary       String
+  /// Ticket numbers highlighted in the handover brief
+  openTickets   String[]  @default([])
+  acknowledgedAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  fromUser User  @relation("HandoverFrom", fields: [fromUserId], references: [id])
+  toUser   User? @relation("HandoverTo", fields: [toUserId], references: [id])
+
+  @@index([shiftDate])
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([createdAt])
+  @@map("handover_logs")
 }
 
 // ─── Vendor ──────────────────────────────────────────────────────────────────
@@ -369,23 +411,29 @@ model TicketActivity {
 
 /// Contractual SLA clock-stop windows (BRI-coordinated holds).
 model SlaPauseInterval {
-  id          String    @id @default(cuid())
-  ticketId    String
-  reasonCode  String
-  reasonNote  String?
-  startedAt   DateTime  @default(now())
-  endedAt     DateTime?
-  startedById String?
-  endedById   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id             String                 @id @default(cuid())
+  ticketId       String
+  reasonCode     String
+  reasonNote     String?
+  startedAt      DateTime               @default(now())
+  endedAt        DateTime?
+  startedById    String?
+  endedById      String?
+  approvalStatus SlaPauseApprovalStatus @default(NOT_REQUIRED)
+  approvedById   String?
+  approvedAt     DateTime?
+  rejectionNote  String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
 
-  ticket    Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  startedBy User?  @relation("SlaPauseStartedBy", fields: [startedById], references: [id])
-  endedBy   User?  @relation("SlaPauseEndedBy", fields: [endedById], references: [id])
+  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  startedBy  User?  @relation("SlaPauseStartedBy", fields: [startedById], references: [id])
+  endedBy    User?  @relation("SlaPauseEndedBy", fields: [endedById], references: [id])
+  approvedBy User?  @relation("SlaPauseApprovedBy", fields: [approvedById], references: [id])
 
   @@index([ticketId])
   @@index([ticketId, endedAt])
+  @@index([ticketId, approvalStatus])
   @@index([startedAt])
   @@map("sla_pause_intervals")
 }
@@ -689,4 +737,45 @@ model IntegrationClient {
 
   @@index([isActive])
   @@map("integration_clients")
+}
+
+/// Monitoring / diagnostic ingest log (webhook → optional auto Incident).
+model IngestEvent {
+  id              String   @id @default(cuid())
+  sourceSystem    String
+  externalEventId String
+  payloadJson     String
+  severityCode    String?
+  serialNumber    String?
+  merchantId      String?
+  alertCode       String?
+  matchedRule     String?
+  outcome         String
+  ticketId        String?
+  ticketNumber    String?
+  errorMessage    String?
+  receivedAt      DateTime @default(now())
+
+  @@unique([sourceSystem, externalEventId])
+  @@index([receivedAt])
+  @@index([outcome])
+  @@index([serialNumber])
+  @@map("ingest_events")
+}
+
+/// Batch log for monthly PM generation and peak intensification runs.
+model PmCampaignRun {
+  id          String   @id @default(cuid())
+  kind        String
+  periodKey   String
+  status      String   @default("DONE")
+  ticketCount Int      @default(0)
+  metaJson    String?
+  createdById String?
+  generatedAt DateTime @default(now())
+
+  @@unique([kind, periodKey])
+  @@index([generatedAt])
+  @@index([kind])
+  @@map("pm_campaign_runs")
 }
