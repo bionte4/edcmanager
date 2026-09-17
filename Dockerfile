@@ -35,12 +35,21 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Prisma schema + engines for optional db push / generate at start
+# Prisma schema + CLI for optional db push at start
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/package.json ./package.json
+
+# Prisma CLI pulls @prisma/config → effect/c12/… (not in standalone tree)
+USER root
+RUN npm install --omit=dev --no-save \
+  effect@3.21.0 \
+  c12@3.1.0 \
+  deepmerge-ts@7.1.5 \
+  empathic@2.0.0 \
+  && chown -R nextjs:nodejs /app/node_modules
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

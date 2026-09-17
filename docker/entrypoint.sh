@@ -1,5 +1,5 @@
 #!/bin/sh
-set -e
+# Do not use `set -e` — Prisma push is optional; app must still start.
 
 echo "[edcmanager] starting…"
 

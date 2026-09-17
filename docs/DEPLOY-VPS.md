@@ -259,7 +259,9 @@ Volume data: `edcmanager_pgdata` (lihat `docker volume ls`).
 
 | Gejala | Tindakan |
 |--------|----------|
+| `curl … Connection reset by peer` | App baru start / sedang restart. Cek `docker compose ps` (PORTS harus `127.0.0.1:3000->3000/tcp`), tunggu "Ready", lalu `curl -I http://127.0.0.1:3000/login`. Kalau PORTS kosong: `up -d --force-recreate app` |
 | `curl 127.0.0.1:3000` gagal | `docker compose ps` · `logs app` · rebuild |
+| `Cannot find module 'effect'` di log Prisma | Non-blocking (UI tetap jalan). Pull image terbaru yang menyertakan deps Prisma CLI, lalu rebuild |
 | 502 Bad Gateway | App belum ready; cek proxy_pass & container health |
 | Certbot gagal | DNS belum propagate; port 80 terbuka; `server_name` benar |
 | DB connection error | Password `.env` vs `DATABASE_URL`; `db` healthy? |
