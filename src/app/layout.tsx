@@ -16,8 +16,8 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EDC Manager · BRI Operations",
-  description: "Vendor, SLA, and buffer stock command center for BRI EDC",
+  title: "EDC Manager · Operations",
+  description: "Vendor, SLA, and buffer stock command center for EDC operations",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

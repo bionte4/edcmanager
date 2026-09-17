@@ -76,7 +76,7 @@ export function isPeakHours(date: Date): boolean {
 }
 
 /**
- * Resolve Annex 3 resolution limit (minutes) for location + category + open time.
+ * Resolve SLA resolution limit (minutes) for location + category + open time.
  * Dalam Kota VIP during peak hours → exactly 2 hours.
  */
 export function getResolutionLimitMinutes(

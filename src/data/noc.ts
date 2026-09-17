@@ -5,7 +5,7 @@ export const MOCK_USERS: NocUser[] = [
   {
     id: "u-noc-1",
     name: "Andi Pratama",
-    email: "andi.noc@bri-edc.local",
+    email: "andi.noc@edc.local",
     phone: "0812-1111-0001",
     role: "NOC",
     isActive: true,
@@ -13,7 +13,7 @@ export const MOCK_USERS: NocUser[] = [
   {
     id: "u-noc-2",
     name: "Siti Rahma",
-    email: "siti.noc@bri-edc.local",
+    email: "siti.noc@edc.local",
     phone: "0812-1111-0002",
     role: "NOC",
     isActive: true,
@@ -21,7 +21,7 @@ export const MOCK_USERS: NocUser[] = [
   {
     id: "u-noc-3",
     name: "Budi Santoso",
-    email: "budi.noc@bri-edc.local",
+    email: "budi.noc@edc.local",
     phone: "0812-1111-0003",
     role: "NOC",
     isActive: true,
@@ -29,7 +29,7 @@ export const MOCK_USERS: NocUser[] = [
   {
     id: "u-sup-1",
     name: "Dewi Lestari",
-    email: "dewi.supervisor@bri-edc.local",
+    email: "dewi.supervisor@edc.local",
     phone: "0812-2222-0001",
     role: "SUPERVISOR",
     isActive: true,
@@ -37,7 +37,7 @@ export const MOCK_USERS: NocUser[] = [
   {
     id: "u-ops-1",
     name: "Rudi Hartono",
-    email: "rudi.ops@bri-edc.local",
+    email: "rudi.ops@edc.local",
     role: "OPS_MANAGER",
     isActive: true,
   },

@@ -1,5 +1,5 @@
 /**
- * SLA Calculation Engine — BRI EDC Annex 3
+ * SLA Calculation Engine — EDC contract rules
  *
  * Public API for ticket duration, peak-hour VIP limits, auto-flagging, and uptime reports.
  */

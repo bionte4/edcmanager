@@ -63,7 +63,7 @@ export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
         <div>
           <h2 className="text-sm font-semibold tracking-wide">Tiket Corrective Maintenance</h2>
           <p className="text-xs text-muted-foreground">
-            Filter lokasi & kategori · badge SLA dari engine Annex 3
+            Filter lokasi & kategori · badge SLA dari engine SLA
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

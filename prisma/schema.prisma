@@ -1,4 +1,4 @@
-// EDC BRI Vendor & SLA Management System
+// EDC Vendor & SLA Management System
 // Prisma schema — PostgreSQL
 
 generator client {

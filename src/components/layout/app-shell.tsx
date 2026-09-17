@@ -37,7 +37,7 @@ export function AppShell({
               <div>
                 <p className="text-sm font-semibold tracking-wide">EDC Manager</p>
                 <p className="text-xs text-muted-foreground">
-                  BRI Operations Command Center · SLA & Buffer Stock
+                  Operations Command Center · SLA & Buffer Stock
                 </p>
               </div>
             </div>

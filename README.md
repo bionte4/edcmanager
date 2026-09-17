@@ -1,6 +1,6 @@
 # EDC Manager
 
-Sistem operasional internal untuk proyek **BRI EDC** (Electronic Data Capture): monitoring SLA corrective maintenance, buffer stock logistik, evaluasi vendor, serta ticketing NOC command center.
+Sistem operasional internal untuk proyek **EDC** (Electronic Data Capture): monitoring SLA corrective maintenance, buffer stock logistik, evaluasi vendor, serta ticketing NOC command center.
 
 Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)
 
@@ -13,7 +13,7 @@ Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)
 | **NOC Roster** | Standby on-duty per shift (pagi/siang/malam) + directory personil |
 | **Buffer Stock** | Distribusi cadangan EDC ≥10% per RO + mutasi/pooling |
 | **Evaluasi Vendor** | Vendor 1 vs Vendor 2: SLA compliance, resolusi, kendala operasional |
-| **SLA Engine** | Aturan Annex 3 (Dalam Kota VIP peak 2 jam, warning 80%, laporan uptime) |
+| **SLA Engine** | Aturan SLA (Dalam Kota VIP peak 2 jam, warning 80%, laporan uptime) |
 
 ## Tech stack
 
@@ -98,4 +98,4 @@ src/
 
 ## Lisensi
 
-Private / internal use — proyek operasional BRI EDC.
+Private / internal use — proyek operasional EDC.

@@ -1,6 +1,6 @@
 /**
- * BRI EDC Annex 3 — SLA & uptime configuration.
- * Adjust these values when BRI contract terms change; do not hardcode elsewhere.
+ * EDC SLA & uptime configuration.
+ * Adjust these values when contract terms change; do not hardcode elsewhere.
  */
 
 export type TicketLocation = "DALAM_KOTA" | "LUAR_KOTA" | "LUAR_PULAU";
@@ -17,7 +17,7 @@ export const PEAK_HOURS = {
 
 /**
  * Resolution SLA limits in minutes, keyed by location → category.
- * Dalam Kota VIP during peak hours uses `peakMinutes` (strict 2 hours per Annex 3).
+ * Dalam Kota VIP during peak hours uses `peakMinutes` (strict 2 hours per SLA policy).
  */
 export const RESOLUTION_SLA_MINUTES = {
   DALAM_KOTA: {

@@ -1,7 +1,7 @@
 {
   "name": "edcmanager",
   "version": "1.0.0",
-  "description": "EDC BRI Vendor & SLA Management System",
+  "description": "EDC Vendor & SLA Management System",
   "private": true,
   "scripts": {
     "dev": "next dev",

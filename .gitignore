@@ -5,3 +5,8 @@ dist/
 *.log
 .DS_Store
 next-env.d.ts
+
+# Local / confidential — do not publish
+Prompted.md
+.cursorrules
+.cursor/
