@@ -137,10 +137,10 @@ Jadwalkan dari **host** (curl ke app lokal) atau cron container. Contoh crontab 
 5 9 * * * curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
   http://127.0.0.1:3000/api/cron/near-breach-digest >/dev/null
 
-# PM bulanan — tanggal 1 jam 01:00 WIB = 18:00 UTC hari sebelumnya
-0 18 28-31 * * [ "$(date -d tomorrow +\%d)" = "01" ] && \
-  curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
-  http://127.0.0.1:3000/api/cron/pm-monthly
+# PM bulanan — panggil harian; app skip jika bukan generateDayOfMonth (PmSettings)
+# Contoh: tiap hari 01:00 WIB = 18:00 UTC
+0 18 * * * curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  http://127.0.0.1:3000/api/cron/pm-monthly >/dev/null
 
 # Peak intensify — setiap hari 08:00 WIB = 01:00 UTC
 0 1 * * * curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
@@ -154,8 +154,13 @@ Uji manual:
 ```bash
 curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
   "http://127.0.0.1:3000/api/cron/near-breach-digest?ignoreWindow=1&force=1"
+
+# PM di luar hari generate
+curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  "http://127.0.0.1:3000/api/cron/pm-monthly?ignoreDay=1"
 ```
 
+Hari generate PM & daftar RO aktif diubah di UI `/ops/campaigns` (tabel `PmSettings`), bukan di crontab.
 ---
 
 ## 6. Update dari GitHub

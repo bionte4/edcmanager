@@ -22,14 +22,15 @@ Vendor ── EdcUnit ── EdcMutationHistory
    │          └── Ticket (optional)
    └── MetricLog (uptime 99.9%)
 
-Masters: LocationDef · TicketCategoryDef · OlaPolicy
+Masters: LocationDef · TicketCategoryDef · OlaPolicy · PeakSeasonWindow · PmSettings
 Integrasi: IntegrationClient · IngestEvent · NotificationLog · AiInsight
 Kampanye: PmCampaignRun
 Peripherals: PeripheralSku / Balance / Mutation
 ```
 
 **SLA** = `location` + `category` + `itsmType` + `openedAt`/`closedAt` − pause **APPROVED/NOT_REQUIRED**.  
-**OLA** = `acknowledgedAt` / `dispatchedAt` + `OlaPolicy` match.
+**OLA** = `acknowledgedAt` / `dispatchedAt` + `OlaPolicy` match.  
+**Dispatch** = skor dari open load + `User.homeRos` + `User.standbyField` (rasio 1:25 di config).
 
 ---
 
@@ -69,6 +70,8 @@ erDiagram
     string email UK
     enum role
     boolean isActive
+    string homeRosJson
+    boolean standbyField
   }
 
   NocShift {
@@ -141,6 +144,22 @@ erDiagram
     string status
   }
 
+  PeakSeasonWindow {
+    string id PK
+    string kind
+    string name
+    string startDate
+    string endDate
+    int bufferFloorPercent
+    boolean isActive
+  }
+
+  PmSettings {
+    string id PK
+    int generateDayOfMonth
+    string activeRosJson
+  }
+
   IntegrationClient {
     string id PK
     string apiKey UK
@@ -184,6 +203,9 @@ erDiagram
 | Vendor | MetricLog | Unique `(vendorId, date)` |
 | IngestEvent | — | Unique `(sourceSystem, externalEventId)` |
 | PmCampaignRun | — | Unique `(kind, periodKey)` — `PM_MONTHLY` / `PEAK_INTENSIFY` |
+| PeakSeasonWindow | — | Unique `(kind, startDate)` — multi-tahun |
+| PmSettings | — | Singleton `id=default` — hari generate + RO aktif |
+| User | homeRos / standby | Coverage dispatch untuk `VENDOR_TECH` |
 
 ### Enum penting
 
@@ -205,17 +227,21 @@ flowchart TB
   Rule -->|yes| Inc[createIntegrationTicket INCIDENT]
   Rule -->|no| Ign[IGNORED log]
 
-  CronPM[cron pm-monthly] --> PmRun[PmCampaignRun]
-  PmRun --> Req[REQUEST + PM per RO]
+  CronPM[cron pm-monthly] -->|hari = PmSettings| PmRun[PmCampaignRun]
+  PmSettings[PmSettings RO aktif] --> PmRun
+  PmRun --> Req[REQUEST + PM per RO aktif]
 
-  CronPeak[cron peak-intensify] --> PeakRun[PmCampaignRun PEAK]
+  PeakDB[PeakSeasonWindow] --> Eval[evaluate peak]
+  CronPeak[cron peak-intensify] --> Eval
+  Eval --> PeakRun[PmCampaignRun PEAK]
   PeakRun --> Mail[Notification DIGEST]
 
   Ticket --> Pause[SlaPauseInterval]
   Pause -->|PENDING| Wait[Supervisor approve]
   Wait -->|APPROVED| Stop[Clock stopped]
 
-  Ticket --> Suggest[dispatch-store score]
+  User -->|homeRos standby| Suggest[dispatch-store score]
+  Ticket --> Suggest
   Suggest --> Tech[VENDOR_TECH pick]
 ```
 
@@ -244,7 +270,7 @@ flowchart LR
 \text{buffer\%} = \frac{\text{count(BUFFER)}}{\text{total units RO}} \times 100
 \]
 
-Ambang: **≥ 10%** (`inventory.config`). Peak season guidance bisa 12–15% (`peak-season.config`).
+Ambang: **≥ 10%** (`inventory.config`). Peak season guidance bisa 12–15% (per window di `PeakSeasonWindow.bufferFloorPercent`).
 
 ---
 

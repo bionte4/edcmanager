@@ -103,16 +103,18 @@ Cron: `POST /api/cron/near-breach-digest` + `CRON_SECRET`.
 - **WFM** — absensi login, swap, roster Excel  
 
 ### 5.5 PM & Peak Season (`/ops/campaigns`)
-- **Generate PM bulan ini** → 1 tiket `REQUEST`+`PM` per Regional Office (idempotent)  
-- Playbook **Tahun Baru / Lebaran / Natal** — checklist + buffer floor + **Jalankan intensifikasi** (email)  
-- Cron: `/api/cron/pm-monthly`, `/api/cron/peak-intensify`  
-- Tanggal peak: `src/config/peak-season.config.ts` (update tiap tahun)
+- **Settings PM (ringan):** hari generate cron (1–28) + RO yang ikut PM — disimpan di `PmSettings`  
+- **Generate PM bulan ini** → 1 tiket `REQUEST`+`PM` per RO **aktif** (idempotent)  
+- **Master peak season:** CRUD window Natal / Tahun Baru / Lebaran (multi-tahun 2028–2031+) di DB  
+- Playbook status ACTIVE/UPCOMING/PAST + **Jalankan intensifikasi** (email)  
+- Cron: `/api/cron/pm-monthly` (skip jika bukan hari generate; `?force=1` / `?ignoreDay=1` untuk uji), `/api/cron/peak-intensify`  
+- API: `/api/ops/pm-settings`, `/api/ops/peak-seasons`
 
 ### 5.6 Dispatch cerdas (`/ops/dispatch`)
-Target **1 teknisi : 25 merchant**.  
+Target **1 teknisi : 25 merchant** (`dispatch.config.ts`).  
 Skor = beban open ticket + home RO + standby.  
 Board kapasitas per RO (understaffed / overload).  
-Home RO teknisi: `src/config/dispatch.config.ts`.
+**Home RO + field standby** diisi di **Admin Users** (role `VENDOR_TECH`) — bukan hardcode email.
 
 ### 5.7 Inventori
 - `/inventory` hub → Assets, Buffer Stock, Peripherals  
@@ -133,11 +135,12 @@ Webhook: `POST /api/v1/monitoring/events` (scope `monitoring:ingest`).
 Demo key: `edc_sk_demo_monitoring_change_me`.
 
 ### 5.12 Admin Users (`/admin/users`)
-CRUD user + role (termasuk LIAISON).
+CRUD user + role (termasuk LIAISON).  
+Untuk **VENDOR_TECH:** centang **home RO** coverage + flag **field standby** (dipakai skor dispatch).
 
 ---
 
-## 6. Aturan bisnis (config)
+## 6. Aturan bisnis (config / DB)
 
 | Aturan | Nilai / lokasi |
 |--------|----------------|
@@ -149,6 +152,9 @@ CRUD user + role (termasuk LIAISON).
 | Uptime | 99.9% |
 | Buffer min | 10% RO |
 | Dispatch ratio | 1:25 · `dispatch.config.ts` |
+| Tech home RO / standby | `User.homeRosJson` / `standbyField` · Admin Users |
+| Peak season dates | `PeakSeasonWindow` · UI `/ops/campaigns` |
+| PM day + RO aktif | `PmSettings` · UI `/ops/campaigns` |
 | LO shifts | DAY_DOG / NIGHT_DOG · `liaison.config.ts` |
 
 ---
@@ -172,9 +178,13 @@ CRUD user + role (termasuk LIAISON).
 3. Intensifikasi peak / pantau kapasitas dispatch  
 
 ### Ops Manager
-1. Generate PM bulanan  
-2. Peak playbook + reporting export  
-3. Tune OLA / lokasi / kategori  
+1. Generate PM bulanan / simpan Settings PM  
+2. CRUD peak season (tahun baru) + intensifikasi  
+3. Peak playbook + reporting export  
+4. Tune OLA / lokasi / kategori  
+
+### Admin
+1. User CRUD — assign home RO + standby untuk teknisi field  
 
 ---
 
@@ -203,7 +213,8 @@ Env penting: `DATABASE_URL`, `AUTH_SECRET`, SMTP opsional, `CRON_SECRET` untuk j
 | Clock-stop tidak menghentikan timer | Alasan ★ masih PENDING approval |
 | Digest “already sent” | Idempotent per hari WIB; pakai Kirim ulang / `?force=1` |
 | Monitoring tidak buat tiket | Severity harus CRITICAL/MAJOR; scope `monitoring:ingest` |
-| PM generate 0 tiket baru | Sudah ada `externalTicketId` periode yang sama |
+| PM generate 0 tiket baru | Sudah ada `externalTicketId` periode yang sama; cek RO aktif di Settings PM |
+| Cron PM skipped `not_generate_day` | Hari WIB ≠ `PmSettings.generateDayOfMonth`; uji `?ignoreDay=1` |
 | Dispatch understaffed | Assign home RO di Admin Users · tambah VENDOR_TECH |
 | Cron 401 | Set `CRON_SECRET` + Bearer header |
 

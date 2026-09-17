@@ -22,8 +22,8 @@ Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)
 | **Clock-stop SLA** | Pause timer (alasan BRI); alasan sensitif butuh approval Supervisor |
 | **Near-breach 16:00** | Antrian WARNING/BREACHED + digest email harian |
 | **Workforce** | NOC roster 3 shift, WFM absensi/swap, **Liaison LO** (DOG 2 shift + handover + inbox eskalasi) |
-| **PM / Peak** | Kalender PM bulanan (REQUEST+PM) + playbook Natal/Tahun Baru/Lebaran |
-| **Dispatch cerdas** | Saran teknisi 1:25 merchant (beban + home RO + standby) |
+| **PM / Peak** | Settings PM (hari + RO) + master peak season di DB (CRUD multi-tahun) |
+| **Dispatch cerdas** | Saran 1:25 (beban + home RO + standby dari profil User) |
 | **Inventori** | Assets EDC, buffer ≥10%, peripherals |
 | **Vendor** | Master + evaluasi SLA/uptime/alokasi |
 | **Integrasi** | SMTP, AI Insight, API clients, **monitoring → auto Incident** |
@@ -81,13 +81,13 @@ App: http://localhost:3000 · Postgres: `localhost:5432`
 | `/` | Dashboard |
 | `/ticketing` | Ticketing + clock-stop + saran dispatch |
 | `/ops/near-breach` | Antrian near-breach 16:00 |
-| `/ops/campaigns` | PM bulanan + peak season |
+| `/ops/campaigns` | PM settings + peak season CRUD + generate |
 | `/ops/dispatch` | Kapasitas RO + saran teknisi |
 | `/workforce` | NOC · LO/DOG · Handover · Inbox · WFM |
 | `/inventory` | Assets / buffer / peripherals |
 | `/vendors` | Master + evaluasi |
 | `/integration` | SMTP / AI / API / monitoring ingest |
-| `/admin/users` | User CRUD |
+| `/admin/users` | User CRUD + home RO / standby (VENDOR_TECH) |
 
 ## Integration & cron API
 
@@ -103,19 +103,27 @@ Demo: `edc_sk_demo_monitoring_change_me`
 | Endpoint | Fungsi |
 |----------|--------|
 | `/api/cron/near-breach-digest` | Digest near-breach (≥16:00 WIB) |
-| `/api/cron/pm-monthly` | Generate PM 1 tiket/RO |
+| `/api/cron/pm-monthly` | Generate PM per RO aktif (hari = `PmSettings`) |
 | `/api/cron/peak-intensify` | Intensifikasi peak season + email |
 
-## Aturan bisnis (config)
+**Ops masters (session):**
 
-Sumber: `src/config/` — jangan hardcode di UI.
+| Endpoint | Fungsi |
+|----------|--------|
+| `/api/ops/peak-seasons` | CRUD window Natal/TB/Lebaran |
+| `/api/ops/pm-settings` | Hari generate + RO aktif PM |
+
+## Aturan bisnis (config + DB)
+
+Sumber: `src/config/` + tabel master (jangan hardcode tanggal/RO di UI).
 
 - **SLA Dalam Kota + VIP + peak 06.01–21.00 WIB:** resolusi **2 jam**
 - **Warning** ≥ **80%** elapsed; **Breached** lewat deadline
 - **Clock-stop** mengurangi elapsed efektif; alasan ★ butuh approval
 - **Uptime target:** **99.9%**
-- **Buffer:** ≥ **10%** per RO (peak season bisa naik guidance ke 12–15%)
-- **Dispatch:** **1 teknisi : 25 merchant** (`dispatch.config.ts`)
+- **Buffer:** ≥ **10%** per RO (peak window di DB bisa set floor 12–15%)
+- **Dispatch:** **1 : 25** (`dispatch.config.ts`); home RO / standby di **User**
+- **Peak dates / PM day+RO:** Postgres (`PeakSeasonWindow`, `PmSettings`)
 
 ## Struktur folder
 
