@@ -1,12 +1,29 @@
 /**
- * Peak season playbook (Natal, Tahun Baru, Lebaran).
- * Update yearly windows here — do not hardcode in UI.
+ * Peak season playbook — defaults + pure evaluation helpers.
+ * Runtime windows live in Postgres (`PeakSeasonWindow`); edit via UI.
+ * Do not hardcode yearly dates in components — use the store/API.
  */
 
-export type PeakSeasonId = "NATAL" | "TAHUN_BARU" | "LEBARAN";
+export type PeakSeasonKind = "NATAL" | "TAHUN_BARU" | "LEBARAN";
+
+/** @deprecated Use PeakSeasonKind */
+export type PeakSeasonId = PeakSeasonKind;
+
+export const PEAK_SEASON_KINDS: readonly PeakSeasonKind[] = [
+  "TAHUN_BARU",
+  "LEBARAN",
+  "NATAL",
+] as const;
+
+export const PEAK_SEASON_KIND_LABELS: Record<PeakSeasonKind, string> = {
+  TAHUN_BARU: "Tahun Baru",
+  LEBARAN: "Lebaran / Idul Fitri",
+  NATAL: "Natal",
+};
 
 export interface PeakSeasonWindow {
-  id: PeakSeasonId;
+  id: string;
+  kind: PeakSeasonKind;
   name: string;
   /** Inclusive start YYYY-MM-DD (Asia/Jakarta calendar). */
   startDate: string;
@@ -18,15 +35,18 @@ export interface PeakSeasonWindow {
   bufferFloorPercent: number;
   /** Checklist items for ops intensifikasi. */
   checklist: string[];
+  isActive: boolean;
+  sortOrder: number;
 }
 
 /**
- * Windows for contract year around DEMO_AS_OF (2026).
- * Lebaran dates approximate — adjust when HR/BRI calendar published.
+ * Seed / fallback windows around DEMO_AS_OF (2026).
+ * Lebaran dates approximate — Ops updates via UI when HR/BRI calendar published.
  */
-export const PEAK_SEASON_WINDOWS_2026: readonly PeakSeasonWindow[] = [
+export const DEFAULT_PEAK_SEASON_WINDOWS: readonly PeakSeasonWindow[] = [
   {
-    id: "TAHUN_BARU",
+    id: "peak-tb-2026",
+    kind: "TAHUN_BARU",
     name: "Tahun Baru",
     startDate: "2025-12-28",
     endDate: "2026-01-05",
@@ -38,9 +58,12 @@ export const PEAK_SEASON_WINDOWS_2026: readonly PeakSeasonWindow[] = [
       "Prioritas VIP Dalam Kota — pantau near-breach tiap jam",
       "Siapkan pooling unit idle antar RO Jabodetabek",
     ],
+    isActive: true,
+    sortOrder: 10,
   },
   {
-    id: "LEBARAN",
+    id: "peak-lebaran-2026",
+    kind: "LEBARAN",
     name: "Lebaran / Idul Fitri",
     startDate: "2026-03-15",
     endDate: "2026-03-28",
@@ -52,9 +75,12 @@ export const PEAK_SEASON_WINDOWS_2026: readonly PeakSeasonWindow[] = [
       "Eskalasi LO untuk merchant mall/rest area",
       "Koordinasi BRI hold clock-stop force majeure mudik",
     ],
+    isActive: true,
+    sortOrder: 20,
   },
   {
-    id: "NATAL",
+    id: "peak-natal-2026",
+    kind: "NATAL",
     name: "Natal",
     startDate: "2026-12-20",
     endDate: "2026-12-27",
@@ -66,14 +92,24 @@ export const PEAK_SEASON_WINDOWS_2026: readonly PeakSeasonWindow[] = [
       "Pastikan spare thermal/paper peripheral di RO besar",
       "Near-breach digest 2× sehari (12:00 & 16:00)",
     ],
+    isActive: true,
+    sortOrder: 30,
   },
 ];
 
+/** @deprecated Prefer DEFAULT_PEAK_SEASON_WINDOWS */
+export const PEAK_SEASON_WINDOWS_2026 = DEFAULT_PEAK_SEASON_WINDOWS;
+
 export const PEAK_SEASON_CONFIG = {
   timezone: "Asia/Jakarta",
-  windows: PEAK_SEASON_WINDOWS_2026,
+  /** Fallback only — runtime uses DB via peak-season-store */
+  windows: DEFAULT_PEAK_SEASON_WINDOWS,
   externalSystem: "peak-playbook",
 } as const;
+
+export function isPeakSeasonKind(v: string): v is PeakSeasonKind {
+  return (PEAK_SEASON_KINDS as readonly string[]).includes(v);
+}
 
 function parseYmdLocal(ymd: string): number {
   const [y, m, d] = ymd.split("-").map(Number);
@@ -103,28 +139,48 @@ export type PeakSeasonStatus = {
   intensifyDue: boolean;
 };
 
-export function evaluatePeakSeasons(asOf = new Date()): PeakSeasonStatus[] {
+export function evaluatePeakSeasons(
+  windows: readonly PeakSeasonWindow[],
+  asOf = new Date()
+): PeakSeasonStatus[] {
   const today = jakartaYmd(asOf);
-  return PEAK_SEASON_CONFIG.windows.map((window) => {
-    const daysUntilStart = daysBetweenYmd(today, window.startDate);
-    const daysUntilEnd = daysBetweenYmd(today, window.endDate);
-    let state: PeakSeasonStatus["state"] = "UPCOMING";
-    if (daysUntilEnd < 0) state = "PAST";
-    else if (daysUntilStart <= 0 && daysUntilEnd >= 0) state = "ACTIVE";
-    const intensifyDue =
-      state === "ACTIVE" ||
-      (state === "UPCOMING" && daysUntilStart <= window.alertLeadDays);
-    return {
-      window,
-      state,
-      daysUntilStart,
-      daysUntilEnd,
-      intensifyDue,
-    };
-  });
+  return windows
+    .filter((w) => w.isActive)
+    .slice()
+    .sort(
+      (a, b) =>
+        a.sortOrder - b.sortOrder || a.startDate.localeCompare(b.startDate)
+    )
+    .map((window) => {
+      const daysUntilStart = daysBetweenYmd(today, window.startDate);
+      const daysUntilEnd = daysBetweenYmd(today, window.endDate);
+      let state: PeakSeasonStatus["state"] = "UPCOMING";
+      if (daysUntilEnd < 0) state = "PAST";
+      else if (daysUntilStart <= 0 && daysUntilEnd >= 0) state = "ACTIVE";
+      const intensifyDue =
+        state === "ACTIVE" ||
+        (state === "UPCOMING" && daysUntilStart <= window.alertLeadDays);
+      return {
+        window,
+        state,
+        daysUntilStart,
+        daysUntilEnd,
+        intensifyDue,
+      };
+    });
 }
 
-export function peakPeriodKey(id: PeakSeasonId, startDate: string): string {
+export function peakPeriodKey(kind: PeakSeasonKind, startDate: string): string {
   const year = startDate.slice(0, 4);
-  return `${id}-${year}`;
+  return `${kind}-${year}`;
+}
+
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function assertValidYmd(label: string, value: string): void {
+  if (!YMD_RE.test(value)) {
+    throw new Error(`${label} harus format YYYY-MM-DD.`);
+  }
+  const t = Date.parse(`${value}T12:00:00Z`);
+  if (Number.isNaN(t)) throw new Error(`${label} tidak valid.`);
 }

@@ -184,6 +184,39 @@ async function main() {
     ["u-lo-2", "Gilang Liaison", "gilang.lo@edc.local", "0812-3333-0002", "LIAISON"],
   ];
   for (const [id, name, email, phone, role] of users) {
+    const techCoverage =
+      email === "eko.tech@edc.local"
+        ? {
+            homeRosJson: JSON.stringify(["RO Jakarta 1", "RO Bandung"]),
+            standbyField: true,
+          }
+        : email === "rina.tech@edc.local"
+          ? {
+              homeRosJson: JSON.stringify([
+                "RO Surabaya",
+                "RO Semarang",
+                "RO Denpasar",
+              ]),
+              standbyField: true,
+            }
+          : email === "agus.tech@edc.local"
+            ? {
+                homeRosJson: JSON.stringify(["RO Medan", "RO Palembang"]),
+                standbyField: false,
+              }
+            : email === "maya.tech@edc.local"
+              ? {
+                  homeRosJson: JSON.stringify([
+                    "RO Makassar",
+                    "RO Manado",
+                    "RO Jayapura",
+                    "RO Balikpapan",
+                    "RO Pontianak",
+                  ]),
+                  standbyField: false,
+                }
+              : { homeRosJson: "[]", standbyField: false };
+
     await prisma.user.upsert({
       where: { email },
       update: {
@@ -193,6 +226,8 @@ async function main() {
         passwordHash: DEMO_PASSWORD,
         isActive: true,
         deletedAt: null,
+        homeRosJson: techCoverage.homeRosJson,
+        standbyField: techCoverage.standbyField,
       },
       create: {
         id,
@@ -202,6 +237,8 @@ async function main() {
         role,
         passwordHash: DEMO_PASSWORD,
         isActive: true,
+        homeRosJson: techCoverage.homeRosJson,
+        standbyField: techCoverage.standbyField,
       },
     });
   }
@@ -550,6 +587,85 @@ async function main() {
       metaJson: JSON.stringify({ note: "Seed placeholder — generate via /ops/campaigns" }),
     },
   });
+
+  const peakDefaults = [
+    {
+      id: "peak-tb-2026",
+      kind: "TAHUN_BARU",
+      name: "Tahun Baru",
+      startDate: "2025-12-28",
+      endDate: "2026-01-05",
+      alertLeadDays: 7,
+      bufferFloorPercent: 15,
+      sortOrder: 10,
+      checklist: [
+        "Naikkan buffer stock target RO metropolitan ke ≥15%",
+        "Standby LO DOG full coverage malam tahun baru",
+        "Prioritas VIP Dalam Kota — pantau near-breach tiap jam",
+        "Siapkan pooling unit idle antar RO Jabodetabek",
+      ],
+    },
+    {
+      id: "peak-lebaran-2026",
+      kind: "LEBARAN",
+      name: "Lebaran / Idul Fitri",
+      startDate: "2026-03-15",
+      endDate: "2026-03-28",
+      alertLeadDays: 14,
+      bufferFloorPercent: 15,
+      sortOrder: 20,
+      checklist: [
+        "Pre-position buffer di RO transit mudik (Bandung, Semarang, Surabaya)",
+        "Batasi PM non-kritis selama H-3 s/d H+3",
+        "Eskalasi LO untuk merchant mall/rest area",
+        "Koordinasi BRI hold clock-stop force majeure mudik",
+      ],
+    },
+    {
+      id: "peak-natal-2026",
+      kind: "NATAL",
+      name: "Natal",
+      startDate: "2026-12-20",
+      endDate: "2026-12-27",
+      alertLeadDays: 10,
+      bufferFloorPercent: 12,
+      sortOrder: 30,
+      checklist: [
+        "Intensifikasi monitoring uptime mall & F&B",
+        "Roster LO + NOC overlapping shift malam Natal",
+        "Pastikan spare thermal/paper peripheral di RO besar",
+        "Near-breach digest 2× sehari (12:00 & 16:00)",
+      ],
+    },
+  ];
+  for (const w of peakDefaults) {
+    await prisma.peakSeasonWindow.upsert({
+      where: {
+        kind_startDate: { kind: w.kind, startDate: w.startDate },
+      },
+      update: {
+        name: w.name,
+        endDate: w.endDate,
+        alertLeadDays: w.alertLeadDays,
+        bufferFloorPercent: w.bufferFloorPercent,
+        checklistJson: JSON.stringify(w.checklist),
+        sortOrder: w.sortOrder,
+        isActive: true,
+      },
+      create: {
+        id: w.id,
+        kind: w.kind,
+        name: w.name,
+        startDate: w.startDate,
+        endDate: w.endDate,
+        alertLeadDays: w.alertLeadDays,
+        bufferFloorPercent: w.bufferFloorPercent,
+        checklistJson: JSON.stringify(w.checklist),
+        sortOrder: w.sortOrder,
+        isActive: true,
+      },
+    });
+  }
 
   console.log("[seed] done");
 }

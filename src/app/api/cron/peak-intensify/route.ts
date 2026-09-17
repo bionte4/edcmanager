@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     }
     const url = new URL(request.url);
     const force = url.searchParams.get("force") === "1";
-    const snapshot = getPeakSeasonSnapshot();
+    const snapshot = await getPeakSeasonSnapshot();
     const due = snapshot.intensifyDue;
     if (due.length === 0) {
       return NextResponse.json({
@@ -28,6 +28,7 @@ export async function POST(request: Request) {
         reason: "no_peak_in_lead_window",
         seasons: snapshot.seasons.map((s) => ({
           id: s.window.id,
+          kind: s.window.kind,
           state: s.state,
           intensifyDue: s.intensifyDue,
         })),
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     for (const s of due) {
       results.push(
         await runPeakIntensify({
-          peakId: s.window.id,
+          windowId: s.window.id,
           force,
           notify: true,
         })

@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { REGIONAL_OFFICES } from "@/config/assets.config";
 import {
   DEMO_PASSWORD,
   ROLE_LABELS,
@@ -29,6 +30,8 @@ interface AdminUserRow {
   phone?: string;
   role: AppRole;
   isActive: boolean;
+  homeRos?: string[];
+  standbyField?: boolean;
   createdAt: string;
 }
 
@@ -55,6 +58,8 @@ export function AdminUsersModule() {
   const [role, setRole] = useState<AppRole>("NOC");
   const [password, setPassword] = useState(DEMO_PASSWORD);
   const [isActive, setIsActive] = useState(true);
+  const [homeRos, setHomeRos] = useState<string[]>([]);
+  const [standbyField, setStandbyField] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -79,6 +84,8 @@ export function AdminUsersModule() {
     setRole("NOC");
     setPassword(DEMO_PASSWORD);
     setIsActive(true);
+    setHomeRos([]);
+    setStandbyField(false);
   }
 
   function startEdit(user: AdminUserRow) {
@@ -89,8 +96,16 @@ export function AdminUsersModule() {
     setRole(user.role);
     setPassword("");
     setIsActive(user.isActive);
+    setHomeRos(user.homeRos ?? []);
+    setStandbyField(!!user.standbyField);
     setMessage(null);
     setError(null);
+  }
+
+  function toggleRo(ro: string) {
+    setHomeRos((prev) =>
+      prev.includes(ro) ? prev.filter((x) => x !== ro) : [...prev, ro]
+    );
   }
 
   async function onSubmit(e: FormEvent) {
@@ -105,6 +120,8 @@ export function AdminUsersModule() {
       phone,
       role,
       isActive,
+      homeRos,
+      standbyField,
       ...(password ? { password } : {}),
     };
 
@@ -148,6 +165,8 @@ export function AdminUsersModule() {
       </Card>
     );
   }
+
+  const showDispatchFields = role === "VENDOR_TECH";
 
   return (
     <div className="flex flex-col gap-3">
@@ -215,6 +234,41 @@ export function AdminUsersModule() {
                 />
                 Aktif
               </label>
+
+              {showDispatchFields && (
+                <div className="rounded-md border border-border bg-muted/20 p-2">
+                  <p className="mb-1.5 text-xs font-semibold">
+                    Dispatch coverage (VENDOR_TECH)
+                  </p>
+                  <p className="mb-2 text-[11px] text-muted-foreground">
+                    Home RO dipakai scoring saran dispatch · standby = bonus skor
+                  </p>
+                  <div className="mb-2 grid max-h-36 grid-cols-2 gap-1 overflow-auto sm:grid-cols-3">
+                    {REGIONAL_OFFICES.map((ro) => (
+                      <label
+                        key={ro}
+                        className="flex items-center gap-1.5 text-[11px]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={homeRos.includes(ro)}
+                          onChange={() => toggleRo(ro)}
+                        />
+                        <span className="truncate">{ro}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={standbyField}
+                      onChange={(e) => setStandbyField(e.target.checked)}
+                    />
+                    Field standby
+                  </label>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2">
                 <Button type="submit">{editingId ? "Update" : "Create"}</Button>
                 {editingId && (
@@ -259,7 +313,9 @@ export function AdminUsersModule() {
       <section className="rounded-lg border border-border bg-card">
         <div className="border-b border-border px-3 py-2">
           <h2 className="text-sm font-semibold tracking-wide">User Directory</h2>
-          <p className="text-xs text-muted-foreground">CRUD + soft delete · guarded by user:manage</p>
+          <p className="text-xs text-muted-foreground">
+            CRUD + soft delete · home RO / standby untuk VENDOR_TECH
+          </p>
         </div>
         <Table>
           <TableHeader>
@@ -267,6 +323,7 @@ export function AdminUsersModule() {
               <TableHead>Nama</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Role</TableHead>
+              <TableHead>Home RO</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Aksi</TableHead>
             </TableRow>
@@ -274,10 +331,22 @@ export function AdminUsersModule() {
           <TableBody>
             {users.map((user) => (
               <TableRow key={user.id}>
-                <TableCell className="font-medium">{user.name}</TableCell>
+                <TableCell className="font-medium">
+                  {user.name}
+                  {user.standbyField && (
+                    <Badge variant="outline" className="ml-1.5 text-[10px]">
+                      Standby
+                    </Badge>
+                  )}
+                </TableCell>
                 <TableCell className="font-mono text-xs">{user.email}</TableCell>
                 <TableCell>
                   <Badge variant="secondary">{ROLE_LABELS[user.role]}</Badge>
+                </TableCell>
+                <TableCell className="max-w-[200px] text-[11px] text-muted-foreground">
+                  {(user.homeRos?.length ?? 0) > 0
+                    ? user.homeRos!.join(", ")
+                    : "—"}
                 </TableCell>
                 <TableCell>
                   <Badge variant={user.isActive ? "safe" : "breached"}>

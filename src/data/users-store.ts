@@ -1,5 +1,6 @@
 import type { AppRole } from "@/config/rbac.config";
 import { DEMO_PASSWORD } from "@/config/rbac.config";
+import { REGIONAL_OFFICES } from "@/config/assets.config";
 import type { AuthUser } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 
@@ -7,8 +8,41 @@ export interface ManagedUser extends AuthUser {
   phone?: string;
   /** Demo: compared as plaintext against passwordHash column. */
   password: string;
+  /** Home Regional Offices for dispatch coverage (VENDOR_TECH). */
+  homeRos: string[];
+  /** Field standby flag for dispatch scoring. */
+  standbyField: boolean;
   deletedAt?: string | null;
   createdAt: string;
+}
+
+function parseHomeRos(json: string | null | undefined): string[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((x): x is string => typeof x === "string")
+      .map((x) => x.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function normalizeHomeRos(input: string[] | undefined): string[] {
+  if (!input?.length) return [];
+  const allowed = new Set(REGIONAL_OFFICES as readonly string[]);
+  const out: string[] = [];
+  for (const ro of input) {
+    const t = ro.trim();
+    if (!t) continue;
+    if (!allowed.has(t)) {
+      throw new Error(`Regional office tidak dikenal: ${t}`);
+    }
+    if (!out.includes(t)) out.push(t);
+  }
+  return out;
 }
 
 function mapUser(row: {
@@ -19,6 +53,8 @@ function mapUser(row: {
   role: AppRole | string;
   passwordHash: string | null;
   isActive: boolean;
+  homeRosJson?: string | null;
+  standbyField?: boolean | null;
   deletedAt: Date | null;
   createdAt: Date;
 }): ManagedUser {
@@ -30,6 +66,8 @@ function mapUser(row: {
     role: row.role as AppRole,
     isActive: row.isActive,
     password: row.passwordHash ?? DEMO_PASSWORD,
+    homeRos: parseHomeRos(row.homeRosJson),
+    standbyField: !!row.standbyField,
     deletedAt: row.deletedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
   };
@@ -85,6 +123,8 @@ export async function createUser(input: {
   role: AppRole;
   password?: string;
   isActive?: boolean;
+  homeRos?: string[];
+  standbyField?: boolean;
 }): Promise<ManagedUser> {
   const email = input.email.trim().toLowerCase();
   const existing = await prisma.user.findFirst({
@@ -93,6 +133,7 @@ export async function createUser(input: {
   if (existing && !existing.deletedAt) {
     throw new Error("Email sudah terdaftar.");
   }
+  const homeRos = normalizeHomeRos(input.homeRos);
   const row = await prisma.user.create({
     data: {
       name: input.name.trim(),
@@ -101,6 +142,8 @@ export async function createUser(input: {
       role: input.role,
       passwordHash: input.password?.trim() || DEMO_PASSWORD,
       isActive: input.isActive ?? true,
+      homeRosJson: JSON.stringify(homeRos),
+      standbyField: !!input.standbyField,
     },
   });
   return mapUser(row);
@@ -115,6 +158,8 @@ export async function updateUser(
     role: AppRole;
     password: string;
     isActive: boolean;
+    homeRos: string[];
+    standbyField: boolean;
   }>
 ): Promise<ManagedUser> {
   const current = await prisma.user.findFirst({
@@ -134,6 +179,11 @@ export async function updateUser(
     if (dup) throw new Error("Email sudah dipakai user lain.");
   }
 
+  const homeRosJson =
+    input.homeRos !== undefined
+      ? JSON.stringify(normalizeHomeRos(input.homeRos))
+      : undefined;
+
   const row = await prisma.user.update({
     where: { id },
     data: {
@@ -143,6 +193,8 @@ export async function updateUser(
       role: input.role,
       passwordHash: input.password?.trim() || undefined,
       isActive: input.isActive,
+      homeRosJson,
+      standbyField: input.standbyField,
     },
   });
   return mapUser(row);
@@ -167,6 +219,8 @@ export function toPublicUser(u: ManagedUser) {
     phone: u.phone,
     role: u.role,
     isActive: u.isActive,
+    homeRos: u.homeRos,
+    standbyField: u.standbyField,
     createdAt: u.createdAt,
   };
 }

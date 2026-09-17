@@ -90,8 +90,12 @@ export function DispatchModule() {
       <div className="rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
         Target coverage{" "}
         <strong className="text-foreground">1 teknisi : {targetRatio} merchant</strong>
-        . Skor = beban tiket terbuka + kecocokan home RO + standby. Tanpa GIS —
-        matching RO saja.
+        . Skor = beban tiket terbuka + kecocokan home RO + standby. Home RO /
+        standby diisi di{" "}
+        <a href="/admin/users" className="text-primary underline-offset-2 hover:underline">
+          Admin Users
+        </a>{" "}
+        (role VENDOR_TECH). Tanpa GIS — matching RO saja.
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}

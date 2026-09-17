@@ -212,6 +212,7 @@ export const ROUTE_PERMISSIONS: Array<{
   { prefix: "/api/ops/near-breach", permission: "ticket:read" },
   { prefix: "/ops/campaigns", permission: "ticket:read" },
   { prefix: "/api/ops/campaigns", permission: "ticket:read" },
+  { prefix: "/api/ops/peak-seasons", permission: "ticket:read" },
   { prefix: "/ops/dispatch", permission: "ticket:read" },
   { prefix: "/api/ops/dispatch", permission: "ticket:read" },
   { prefix: "/reporting", permission: "report:read" },

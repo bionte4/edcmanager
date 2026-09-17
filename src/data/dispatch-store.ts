@@ -1,8 +1,8 @@
 import { REGIONAL_OFFICES } from "@/config/assets.config";
 import {
   DISPATCH_CONFIG,
-  homeRosForTech,
-  isTechStandby,
+  homeRosFromUser,
+  isUserStandby,
 } from "@/config/dispatch.config";
 import { listAssets } from "@/data/assets-store";
 import { findLocationByCode, listLocations } from "@/data/locations-store";
@@ -125,7 +125,7 @@ export async function getRoCapacityBoard(): Promise<RoCapacityRow[]> {
   return REGIONAL_OFFICES.map((ro) => {
     const merchantCount = merchantCounts.get(ro) ?? 0;
     const techCount = techs.filter((t) =>
-      homeRosForTech(t.email, t.name).includes(ro)
+      homeRosFromUser(t).includes(ro)
     ).length;
     const targetTechs = Math.max(
       1,
@@ -198,7 +198,7 @@ export async function suggestDispatch(input: {
     : 0;
   const techCountInRo = regionalOffice
     ? techs.filter((t) =>
-        homeRosForTech(t.email, t.name).includes(regionalOffice!)
+        homeRosFromUser(t).includes(regionalOffice!)
       ).length
     : techs.length;
   const targetTechsForRo = Math.max(
@@ -207,12 +207,12 @@ export async function suggestDispatch(input: {
   );
 
   const candidates: DispatchCandidate[] = techs.map((u) => {
-    const homeRos = homeRosForTech(u.email, u.name);
+    const homeRos = homeRosFromUser(u);
     const roMatch = regionalOffice
       ? homeRos.includes(regionalOffice)
       : false;
     const openTickets = openByTech.get(u.name.toLowerCase()) ?? 0;
-    const standby = isTechStandby(u.email);
+    const standby = isUserStandby(u);
     const { score, reasons } = scoreCandidate({
       openTickets,
       roMatch,

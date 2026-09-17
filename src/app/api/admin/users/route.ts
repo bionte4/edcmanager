@@ -51,6 +51,8 @@ export async function POST(request: Request) {
       role?: AppRole;
       password?: string;
       isActive?: boolean;
+      homeRos?: string[];
+      standbyField?: boolean;
     };
     const user = await createUser({
       name: body.name ?? "",
@@ -59,6 +61,8 @@ export async function POST(request: Request) {
       role: body.role ?? "NOC",
       password: body.password,
       isActive: body.isActive,
+      homeRos: body.homeRos,
+      standbyField: body.standbyField,
     });
     return NextResponse.json({ user: toPublicUser(user) }, { status: 201 });
   } catch (e) {
@@ -80,6 +84,8 @@ export async function PATCH(request: Request) {
       role?: AppRole;
       password?: string;
       isActive?: boolean;
+      homeRos?: string[];
+      standbyField?: boolean;
     };
     if (!body.id) {
       return NextResponse.json({ error: "id wajib." }, { status: 400 });
@@ -91,6 +97,8 @@ export async function PATCH(request: Request) {
       role: body.role,
       password: body.password,
       isActive: body.isActive,
+      homeRos: body.homeRos,
+      standbyField: body.standbyField,
     });
     return NextResponse.json({ user: toPublicUser(user) });
   } catch (e) {

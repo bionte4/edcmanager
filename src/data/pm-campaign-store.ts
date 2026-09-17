@@ -4,11 +4,11 @@ import {
   jakartaPeriodKey,
 } from "@/config/pm-calendar.config";
 import {
-  evaluatePeakSeasons,
   peakPeriodKey,
-  type PeakSeasonId,
+  type PeakSeasonKind,
   type PeakSeasonStatus,
 } from "@/config/peak-season.config";
+import { getPeakSeasonStatuses } from "@/data/peak-season-store";
 import { listLocations } from "@/data/locations-store";
 import {
   createIntegrationTicket,
@@ -206,13 +206,13 @@ export async function generateMonthlyPm(input: {
   return { periodKey, run: mapRun(run), created, skipped };
 }
 
-export function getPeakSeasonSnapshot(asOf = new Date()): {
+export async function getPeakSeasonSnapshot(asOf = new Date()): Promise<{
   asOf: string;
   seasons: PeakSeasonStatus[];
   active: PeakSeasonStatus[];
   intensifyDue: PeakSeasonStatus[];
-} {
-  const seasons = evaluatePeakSeasons(asOf);
+}> {
+  const seasons = await getPeakSeasonStatuses(asOf);
   return {
     asOf: asOf.toISOString(),
     seasons,
@@ -222,7 +222,10 @@ export function getPeakSeasonSnapshot(asOf = new Date()): {
 }
 
 export async function runPeakIntensify(input: {
-  peakId: PeakSeasonId;
+  /** DB window id (preferred). */
+  windowId?: string;
+  /** Kind filter — picks matching window from intensifyDue / seasons. */
+  peakId?: PeakSeasonKind;
   actor?: NocUser | null;
   force?: boolean;
   notify?: boolean;
@@ -232,11 +235,19 @@ export async function runPeakIntensify(input: {
   season: PeakSeasonStatus | undefined;
   notified: boolean;
 }> {
-  const snapshot = getPeakSeasonSnapshot();
-  const season = snapshot.seasons.find((s) => s.window.id === input.peakId);
-  if (!season) throw new Error(`Peak season ${input.peakId} tidak dikenal.`);
+  const snapshot = await getPeakSeasonSnapshot();
+  const season = input.windowId
+    ? snapshot.seasons.find((s) => s.window.id === input.windowId)
+    : input.peakId
+      ? snapshot.seasons.find((s) => s.window.kind === input.peakId)
+      : undefined;
+  if (!season) {
+    throw new Error(
+      `Peak season ${input.windowId ?? input.peakId ?? "?"} tidak dikenal / tidak aktif.`
+    );
+  }
 
-  const periodKey = peakPeriodKey(input.peakId, season.window.startDate);
+  const periodKey = peakPeriodKey(season.window.kind, season.window.startDate);
   const existing = await prisma.pmCampaignRun.findUnique({
     where: { kind_periodKey: { kind: "PEAK_INTENSIFY", periodKey } },
   });
@@ -268,7 +279,8 @@ export async function runPeakIntensify(input: {
       ticketCount: 0,
       createdById: input.actor?.id ?? null,
       metaJson: JSON.stringify({
-        peakId: input.peakId,
+        windowId: season.window.id,
+        peakId: season.window.kind,
         name: season.window.name,
         state: season.state,
         bufferFloorPercent: season.window.bufferFloorPercent,
@@ -280,7 +292,8 @@ export async function runPeakIntensify(input: {
       status: "DONE",
       createdById: input.actor?.id ?? null,
       metaJson: JSON.stringify({
-        peakId: input.peakId,
+        windowId: season.window.id,
+        peakId: season.window.kind,
         name: season.window.name,
         state: season.state,
         bufferFloorPercent: season.window.bufferFloorPercent,

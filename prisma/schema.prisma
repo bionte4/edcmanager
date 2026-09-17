@@ -145,6 +145,10 @@ model User {
   isActive     Boolean   @default(true)
   /// Soft delete — never hard-delete operational users
   deletedAt    DateTime?
+  /// JSON string array of home Regional Offices (dispatch coverage)
+  homeRosJson  String    @default("[]")
+  /// Field standby — scoring bonus for smart dispatch
+  standbyField Boolean   @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -162,6 +166,7 @@ model User {
   @@index([role])
   @@index([isActive])
   @@index([deletedAt])
+  @@index([standbyField])
   @@map("users")
 }
 
@@ -778,4 +783,29 @@ model PmCampaignRun {
   @@index([generatedAt])
   @@index([kind])
   @@map("pm_campaign_runs")
+}
+
+/// Peak season playbook windows (Natal / Tahun Baru / Lebaran) — editable via UI.
+/// Multiple years allowed; unique on (kind, startDate).
+model PeakSeasonWindow {
+  id                  String   @id @default(cuid())
+  /// NATAL | TAHUN_BARU | LEBARAN
+  kind                String
+  name                String
+  /// Inclusive YYYY-MM-DD (Asia/Jakarta calendar)
+  startDate           String
+  endDate             String
+  alertLeadDays       Int      @default(7)
+  bufferFloorPercent  Int      @default(12)
+  /// JSON string array of checklist items
+  checklistJson       String   @default("[]")
+  sortOrder           Int      @default(100)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([kind, startDate])
+  @@index([isActive, startDate])
+  @@index([kind])
+  @@map("peak_season_windows")
 }

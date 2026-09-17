@@ -1,0 +1,112 @@
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import {
+  createPeakSeason,
+  deletePeakSeason,
+  listPeakSeasonWindows,
+  seedDefaultPeakSeasons,
+  updatePeakSeason,
+  type PeakSeasonInput,
+} from "@/data/peak-season-store";
+import { findUserById } from "@/data/users-store";
+import {
+  SESSION_COOKIE,
+  sessionToAuthUser,
+  verifySessionToken,
+} from "@/lib/auth/session";
+import { assertCan, type AuthUser } from "@/lib/rbac";
+
+async function requireUser(): Promise<AuthUser> {
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE)?.value;
+  if (!token) throw new Error("Unauthorized");
+  const session = await verifySessionToken(token);
+  if (!session) throw new Error("Unauthorized");
+  const stored = await findUserById(session.sub);
+  if (!stored || !stored.isActive) throw new Error("Unauthorized");
+  return sessionToAuthUser(session);
+}
+
+function statusFor(e: unknown): number {
+  const message = e instanceof Error ? e.message : "Error";
+  if (message === "Unauthorized") return 401;
+  if (message.startsWith("Forbidden")) return 403;
+  return 400;
+}
+
+export async function GET(request: Request) {
+  try {
+    const user = await requireUser();
+    assertCan(user, "ticket:read");
+    const { searchParams } = new URL(request.url);
+    const activeOnly = searchParams.get("activeOnly") === "1";
+    return NextResponse.json({
+      windows: await listPeakSeasonWindows({ activeOnly }),
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Forbidden" },
+      { status: statusFor(e) }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const user = await requireUser();
+    assertCan(user, "ticket:create");
+    const body = (await request.json()) as PeakSeasonInput & {
+      action?: "create" | "seed_defaults";
+    };
+
+    if (body.action === "seed_defaults") {
+      return NextResponse.json({
+        windows: await seedDefaultPeakSeasons(),
+      });
+    }
+
+    const window = await createPeakSeason(body);
+    return NextResponse.json({ window }, { status: 201 });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Error" },
+      { status: statusFor(e) }
+    );
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const user = await requireUser();
+    assertCan(user, "ticket:create");
+    const body = (await request.json()) as Partial<PeakSeasonInput> & {
+      id?: string;
+    };
+    if (!body.id) throw new Error("id wajib.");
+    const { id, ...rest } = body;
+    const window = await updatePeakSeason(id, rest);
+    return NextResponse.json({ window });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Error" },
+      { status: statusFor(e) }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const user = await requireUser();
+    assertCan(user, "ticket:create");
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    if (!id) throw new Error("id wajib.");
+    await deletePeakSeason(id);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Error" },
+      { status: statusFor(e) }
+    );
+  }
+}

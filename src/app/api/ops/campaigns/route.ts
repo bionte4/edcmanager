@@ -7,7 +7,7 @@ import {
   listCampaignRuns,
   runPeakIntensify,
 } from "@/data/pm-campaign-store";
-import type { PeakSeasonId } from "@/config/peak-season.config";
+import type { PeakSeasonKind } from "@/config/peak-season.config";
 import { findUserById } from "@/data/users-store";
 import {
   SESSION_COOKIE,
@@ -52,7 +52,7 @@ export async function GET() {
     assertCan(auth, "ticket:read");
     const [pm, peak, runs] = await Promise.all([
       getPmCalendarSnapshot(),
-      Promise.resolve(getPeakSeasonSnapshot()),
+      getPeakSeasonSnapshot(),
       listCampaignRuns(30),
     ]);
     return NextResponse.json({
@@ -75,7 +75,8 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       action?: string;
       periodKey?: string;
-      peakId?: PeakSeasonId;
+      peakId?: PeakSeasonKind;
+      windowId?: string;
       force?: boolean;
       notify?: boolean;
     };
@@ -92,8 +93,11 @@ export async function POST(request: Request) {
 
     if (body.action === "peak_intensify") {
       assertCan(auth, "ticket:create");
-      if (!body.peakId) throw new Error("peakId wajib.");
+      if (!body.windowId && !body.peakId) {
+        throw new Error("windowId atau peakId wajib.");
+      }
       const result = await runPeakIntensify({
+        windowId: body.windowId,
         peakId: body.peakId,
         actor: noc,
         force: !!body.force,

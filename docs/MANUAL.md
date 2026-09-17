@@ -204,7 +204,7 @@ Env penting: `DATABASE_URL`, `AUTH_SECRET`, SMTP opsional, `CRON_SECRET` untuk j
 | Digest “already sent” | Idempotent per hari WIB; pakai Kirim ulang / `?force=1` |
 | Monitoring tidak buat tiket | Severity harus CRITICAL/MAJOR; scope `monitoring:ingest` |
 | PM generate 0 tiket baru | Sudah ada `externalTicketId` periode yang sama |
-| Dispatch understaffed | Tambah VENDOR_TECH / sesuaikan `TECH_HOME_RO` |
+| Dispatch understaffed | Assign home RO di Admin Users · tambah VENDOR_TECH |
 | Cron 401 | Set `CRON_SECRET` + Bearer header |
 
 ---
