@@ -70,14 +70,22 @@ export async function middleware(request: NextRequest) {
     (r) => pathname === r.prefix || pathname.startsWith(`${r.prefix}/`)
   );
 
-  if (routeRule && !can(user, routeRule.permission)) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (routeRule) {
+    const allowed = routeRule.anyOf?.length
+      ? routeRule.anyOf.some((p) => can(user, p))
+      : routeRule.permission
+        ? can(user, routeRule.permission)
+        : true;
+
+    if (!allowed) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      const home = request.nextUrl.clone();
+      home.pathname = "/";
+      home.search = "";
+      return NextResponse.redirect(home);
     }
-    const home = request.nextUrl.clone();
-    home.pathname = "/";
-    home.search = "";
-    return NextResponse.redirect(home);
   }
 
   return NextResponse.next();

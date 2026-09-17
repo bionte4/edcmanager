@@ -48,18 +48,17 @@ export type AppRole =
 const ALL: Permission[] = [...PERMISSIONS];
 
 /**
- * Nav matrix (distinct per role):
- * | Role         | Menu |
- * | ADMIN        | semua + Integration + Admin Users |
- * | GM           | Executive, Reporting, Vendor, Dashboard (ringkas) |
- * | OPS_MANAGER  | Dashboard, Executive, Ticketing, Assets, Peripherals, Buffer, Vendor, Notifications, WFM, OLA, Categories, Reporting |
- * | SUPERVISOR   | Dashboard, Ticketing, NOC, WFM, Assets, Peripherals, Buffer, Notifications, OLA/Categories read, Reporting |
- * | NOC (L1)     | Dashboard, Ticketing, NOC Roster, Notifications (+ category list via ticket forms) |
- * | VENDOR_TECH  | Dashboard, Ticketing, Assets, Peripherals, Buffer Stock |
+ * Nav matrix (hubs — lihat `nav.config.ts`):
+ * | Role         | Primary strip |
+ * | ADMIN        | Dasbor, Tiket, Workforce, Inventori + Lainnya (config/API/admin) |
+ * | GM           | Dasbor, Executive, Pelaporan, Vendor |
+ * | OPS_MANAGER  | Dasbor, Tiket, Inventori, Pelaporan + Executive/Config |
+ * | SUPERVISOR   | Dasbor, Tiket, Workforce, Inventori |
+ * | NOC (L1)     | Dasbor, Tiket, Workforce (tab NOC) · notif di header |
+ * | VENDOR_TECH  | Dasbor, Tiket, Inventori |
  *
- * NOC tidak punya WFM/OLA menu: roster & OLA policy dikelola Supervisor/Ops.
- * Absensi login NOC tetap dicatat server-side tanpa butuh wfm:read.
- * Badge SLA/OLA di Ticketing tetap terlihat via ticket:read.
+ * Hubs: /inventory · /workforce · /config — tab di dalamnya tetap RBAC per modul CRUD.
+ * Notifikasi: icon bell di header (bukan strip menu).
  */
 export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
   ADMIN: ALL,
@@ -146,12 +145,16 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 /** Page path prefix → required permission (first match wins). */
 export const ROUTE_PERMISSIONS: Array<{
   prefix: string;
-  permission: Permission;
+  /** Require this single permission. */
+  permission?: Permission;
+  /** Or any of these (hubs). */
+  anyOf?: readonly Permission[];
 }> = [
   { prefix: "/admin", permission: "admin:access" },
   { prefix: "/api/admin", permission: "admin:access" },
   { prefix: "/integration", permission: "integration:read" },
   { prefix: "/notifications", permission: "notification:read" },
+  { prefix: "/inventory", permission: "inventory:read" },
   { prefix: "/buffer-stock", permission: "inventory:read" },
   { prefix: "/peripherals", permission: "inventory:read" },
   { prefix: "/api/peripherals", permission: "inventory:read" },
@@ -162,10 +165,12 @@ export const ROUTE_PERMISSIONS: Array<{
   { prefix: "/reporting", permission: "report:read" },
   { prefix: "/api/reporting", permission: "report:read" },
   { prefix: "/executive", permission: "executive:read" },
+  { prefix: "/config", anyOf: ["ola:read", "category:read"] },
   { prefix: "/ola", permission: "ola:read" },
   { prefix: "/api/ola", permission: "ola:read" },
   { prefix: "/categories", permission: "category:read" },
   { prefix: "/api/categories", permission: "category:read" },
+  { prefix: "/workforce", anyOf: ["noc:read", "wfm:read"] },
   { prefix: "/wfm", permission: "wfm:read" },
   { prefix: "/api/wfm", permission: "wfm:read" },
   { prefix: "/noc", permission: "noc:read" },

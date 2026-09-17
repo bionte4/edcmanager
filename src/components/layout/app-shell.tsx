@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
   Boxes,
+  Briefcase,
   Cable,
   CalendarClock,
+  ChevronDown,
   FileBarChart2,
   Gauge,
   Headset,
@@ -16,50 +18,86 @@ import {
   Menu,
   MoreHorizontal,
   Package,
+  Plug,
   Radio,
+  Settings2,
   Shield,
   Tags,
   Ticket,
   Users,
+  Warehouse,
   X,
-  Briefcase,
-  Plug,
+  type LucideIcon,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/auth-provider";
-import type { Permission } from "@/config/rbac.config";
-import { ROLE_LABELS } from "@/config/rbac.config";
+import {
+  NAV_GROUP_LABELS,
+  NAV_ITEMS,
+  ROLE_PRIMARY_HREFS,
+  canAccessNavItem,
+  type NavIcon,
+  type NavItemDef,
+} from "@/config/nav.config";
+import { ROLE_LABELS, type AppRole } from "@/config/rbac.config";
 import { cn } from "@/lib/utils";
 
-const NAV: Array<{
-  href: string;
-  label: string;
-  shortLabel?: string;
-  icon: typeof LayoutDashboard;
-  permission: Permission;
-}> = [
-  { href: "/", label: "Dashboard", shortLabel: "Home", icon: LayoutDashboard, permission: "dashboard:read" },
-  { href: "/executive", label: "Executive", shortLabel: "Exec", icon: Briefcase, permission: "executive:read" },
-  { href: "/ticketing", label: "Ticketing", shortLabel: "Tiket", icon: Ticket, permission: "ticket:read" },
-  { href: "/noc", label: "NOC Roster", shortLabel: "NOC", icon: Headset, permission: "noc:read" },
-  { href: "/wfm", label: "WFM", icon: CalendarClock, permission: "wfm:read" },
-  { href: "/ola", label: "OLA", icon: Gauge, permission: "ola:read" },
-  { href: "/categories", label: "Kategori", shortLabel: "Kat.", icon: Tags, permission: "category:read" },
-  { href: "/reporting", label: "Reporting", shortLabel: "Report", icon: FileBarChart2, permission: "report:read" },
-  { href: "/assets", label: "Assets", icon: Boxes, permission: "inventory:read" },
-  { href: "/peripherals", label: "Peripherals", shortLabel: "Perif.", icon: Plug, permission: "inventory:read" },
-  { href: "/buffer-stock", label: "Buffer Stock", shortLabel: "Buffer", icon: Package, permission: "inventory:read" },
-  { href: "/evaluasi-vendor", label: "Evaluasi Vendor", shortLabel: "Vendor", icon: Users, permission: "vendor:read" },
-  { href: "/notifications", label: "Notifications", shortLabel: "Notif", icon: Bell, permission: "notification:read" },
-  { href: "/integration", label: "Integrations", shortLabel: "API", icon: Cable, permission: "integration:read" },
-  { href: "/admin/users", label: "Admin Users", shortLabel: "Admin", icon: Shield, permission: "admin:access" },
-];
-
-const PRIMARY_HREFS = ["/", "/ticketing", "/wfm", "/notifications"] as const;
+const ICON_MAP: Record<NavIcon, LucideIcon> = {
+  dashboard: LayoutDashboard,
+  executive: Briefcase,
+  ticket: Ticket,
+  workforce: CalendarClock,
+  inventory: Warehouse,
+  reporting: FileBarChart2,
+  vendor: Users,
+  config: Settings2,
+  integration: Cable,
+  admin: Shield,
+  bell: Bell,
+  noc: Headset,
+  wfm: CalendarClock,
+  ola: Gauge,
+  category: Tags,
+  boxes: Boxes,
+  plug: Plug,
+  package: Package,
+};
 
 function isActivePath(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const path = href.split("?")[0] ?? href;
+  if (path === "/") return pathname === "/";
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+function NavLink({
+  item,
+  active,
+  className,
+  onClick,
+}: {
+  item: NavItemDef;
+  active: boolean;
+  className?: string;
+  onClick?: () => void;
+}) {
+  const Icon = ICON_MAP[item.icon];
+  return (
+    <Link
+      href={item.href}
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 font-medium transition-colors",
+        active
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        className
+      )}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0" />
+      <span>{item.label}</span>
+    </Link>
+  );
 }
 
 export function AppShell({
@@ -74,21 +112,42 @@ export function AppShell({
   const pathname = usePathname();
   const { user, can, logout, loading } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
 
   const visibleNav = useMemo(
-    () => NAV.filter((item) => can(item.permission)),
+    () => NAV_ITEMS.filter((item) => canAccessNavItem(item, can)),
     [can]
   );
 
+  const stripPrimary = useMemo(
+    () => visibleNav.filter((i) => i.placement === "primary"),
+    [visibleNav]
+  );
+  const stripSecondary = useMemo(
+    () => visibleNav.filter((i) => i.placement === "secondary"),
+    [visibleNav]
+  );
+  const headerNotif = useMemo(
+    () => visibleNav.find((i) => i.placement === "header"),
+    [visibleNav]
+  );
+
   const primaryNav = useMemo(() => {
-    const picked = PRIMARY_HREFS.map((href) =>
-      visibleNav.find((n) => n.href === href)
-    ).filter(Boolean) as typeof visibleNav;
-    return picked.slice(0, 4);
-  }, [visibleNav]);
+    const role = (user?.role ?? "NOC") as AppRole;
+    const preferred = ROLE_PRIMARY_HREFS[role] ?? ROLE_PRIMARY_HREFS.NOC;
+    const picked = preferred
+      .map((href) => visibleNav.find((n) => n.href === href))
+      .filter(Boolean) as NavItemDef[];
+    if (picked.length >= 2) return picked.slice(0, 4);
+    return stripPrimary.slice(0, 4);
+  }, [user?.role, visibleNav, stripPrimary]);
+
+  const moreActive = stripSecondary.some((i) => isActivePath(pathname, i.href));
 
   useEffect(() => {
     setDrawerOpen(false);
+    setMoreOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -103,6 +162,40 @@ export function AppShell({
       document.body.style.overflow = "";
     };
   }, [drawerOpen]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!moreRef.current?.contains(e.target as Node)) setMoreOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
+
+  const drawerGroups = useMemo(() => {
+    const order: Array<NavItemDef["group"]> = [
+      "ops",
+      "logistik",
+      "laporan",
+      "sistem",
+    ];
+    return order
+      .map((g) => ({
+        group: g,
+        label: NAV_GROUP_LABELS[g],
+        items: visibleNav.filter(
+          (i) => i.group === g && i.placement !== "header"
+        ),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [visibleNav]);
 
   return (
     <div className="min-h-dvh pb-[calc(3.75rem+env(safe-area-inset-bottom))] md:pb-0">
@@ -141,6 +234,20 @@ export function AppShell({
                 </span>
               </span>
             )}
+            {headerNotif && (
+              <Link
+                href={headerNotif.href}
+                aria-label="Notifikasi"
+                className={cn(
+                  "inline-flex h-10 w-10 items-center justify-center rounded-md border border-border sm:h-8 sm:w-8",
+                  isActivePath(pathname, headerNotif.href)
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-card text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Bell className="h-3.5 w-3.5" />
+              </Link>
+            )}
             <ThemeToggle />
             <Button
               type="button"
@@ -155,30 +262,69 @@ export function AppShell({
           </div>
         </div>
 
-        {/* Desktop / tablet top nav */}
-        <nav className="mx-auto hidden max-w-[1400px] flex-wrap gap-0.5 px-3 pb-2 sm:px-4 md:flex">
-          {visibleNav.map(({ href, label, icon: Icon }) => {
-            const active = isActivePath(pathname, href);
-            return (
-              <Link
-                key={href}
-                href={href}
+        {/* Desktop nav: primary + Lainnya */}
+        <nav className="mx-auto hidden max-w-[1400px] items-center gap-0.5 px-3 pb-2 sm:px-4 md:flex">
+          {stripPrimary.map((item) => (
+            <NavLink
+              key={item.id}
+              item={item}
+              active={isActivePath(pathname, item.href)}
+              className="min-h-9 rounded-md px-2.5 py-1.5 text-[11px]"
+            />
+          ))}
+
+          {stripSecondary.length > 0 && (
+            <div className="relative ml-0.5" ref={moreRef}>
+              <button
+                type="button"
                 className={cn(
                   "inline-flex min-h-9 items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors",
-                  active
+                  moreOpen || moreActive
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
+                aria-expanded={moreOpen}
+                aria-haspopup="menu"
+                onClick={() => setMoreOpen((v) => !v)}
               >
-                <Icon className="h-3.5 w-3.5" />
-                {label}
-              </Link>
-            );
-          })}
+                <MoreHorizontal className="h-3.5 w-3.5" />
+                Lainnya
+                <ChevronDown className="h-3 w-3 opacity-70" />
+              </button>
+              {moreOpen && (
+                <div
+                  role="menu"
+                  className="absolute left-0 top-full z-40 mt-1 min-w-[12rem] rounded-md border border-border bg-background p-1 shadow-lg"
+                >
+                  {stripSecondary.map((item) => {
+                    const Icon = ICON_MAP[item.icon];
+                    const active = isActivePath(pathname, item.href);
+                    return (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        role="menuitem"
+                        className={cn(
+                          "flex min-h-9 items-center gap-2 rounded-md px-2.5 text-xs font-medium",
+                          active
+                            ? "bg-primary text-primary-foreground"
+                            : "text-foreground hover:bg-muted"
+                        )}
+                        onClick={() => setMoreOpen(false)}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </nav>
       </header>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — grouped */}
       <div
         className={cn(
           "fixed inset-0 z-40 md:hidden",
@@ -222,31 +368,57 @@ export function AppShell({
             </Button>
           </div>
           <nav className="flex-1 overflow-y-auto p-2">
-            {visibleNav.map(({ href, label, icon: Icon }) => {
-              const active = isActivePath(pathname, href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "text-foreground hover:bg-muted"
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {label}
-                </Link>
-              );
-            })}
+            {drawerGroups.map((g) => (
+              <div key={g.group} className="mb-3">
+                <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {g.label}
+                </p>
+                {g.items.map((item) => {
+                  const Icon = ICON_MAP[item.icon];
+                  const active = isActivePath(pathname, item.href);
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className={cn(
+                        "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
+                        active
+                          ? "bg-primary text-primary-foreground"
+                          : "text-foreground hover:bg-muted"
+                      )}
+                      onClick={() => setDrawerOpen(false)}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+            {headerNotif && (
+              <Link
+                href={headerNotif.href}
+                className={cn(
+                  "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium",
+                  isActivePath(pathname, headerNotif.href)
+                    ? "bg-primary text-primary-foreground"
+                    : "text-foreground hover:bg-muted"
+                )}
+                onClick={() => setDrawerOpen(false)}
+              >
+                <Bell className="h-4 w-4" />
+                {headerNotif.label}
+              </Link>
+            )}
           </nav>
         </aside>
       </div>
 
       <main className="mx-auto flex max-w-[1400px] flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4">
         <div>
-          <h1 className="text-base font-semibold tracking-tight sm:text-lg">{title}</h1>
+          <h1 className="text-base font-semibold tracking-tight sm:text-lg">
+            {title}
+          </h1>
           <p className="text-xs text-muted-foreground md:line-clamp-none line-clamp-2">
             {description}
           </p>
@@ -254,7 +426,7 @@ export function AppShell({
         {children}
       </main>
 
-      {/* Mobile bottom nav — primary + More */}
+      {/* Mobile bottom nav */}
       <nav
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
         aria-label="Navigasi utama"
@@ -265,12 +437,13 @@ export function AppShell({
             gridTemplateColumns: `repeat(${Math.max(primaryNav.length + 1, 2)}, minmax(0, 1fr))`,
           }}
         >
-          {primaryNav.map(({ href, shortLabel, label, icon: Icon }) => {
-            const active = isActivePath(pathname, href);
+          {primaryNav.map((item) => {
+            const Icon = ICON_MAP[item.icon];
+            const active = isActivePath(pathname, item.href);
             return (
               <Link
-                key={href}
-                href={href}
+                key={item.id}
+                href={item.href}
                 className={cn(
                   "flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-md text-[10px] font-medium",
                   active
@@ -279,7 +452,9 @@ export function AppShell({
                 )}
               >
                 <Icon className="h-4 w-4" />
-                <span className="truncate px-0.5">{shortLabel ?? label}</span>
+                <span className="truncate px-0.5">
+                  {item.shortLabel ?? item.label}
+                </span>
               </Link>
             );
           })}
