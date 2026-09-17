@@ -61,7 +61,7 @@ export async function POST(request: Request) {
 
     const ticket = await createIntegrationTicket({
       merchantId: body.merchantId ?? "",
-      location: body.location ?? "DALAM_KOTA",
+      location: body.location ?? "JKT_PUSAT",
       category: body.category ?? "NON_VIP",
       description: body.description ?? "",
       vendorName: body.vendorName,

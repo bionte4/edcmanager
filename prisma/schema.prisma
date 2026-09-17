@@ -469,21 +469,24 @@ model TicketCategoryDef {
 
 /// Master lokasi operasional — kode di tiket memetakan ke zona SLA (TicketLocation).
 model LocationDef {
-  id               String         @id @default(cuid())
-  code             String         @unique
-  label            String
+  id                 String         @id @default(cuid())
+  code               String         @unique
+  label              String
   /// Zona matrix RESOLUTION_SLA_MINUTES
-  slaZone          TicketLocation
+  slaZone            TicketLocation
   /// Opsional tautan ke RO inventori
-  regionalOffice   String?
-  description      String?
-  sortOrder        Int            @default(100)
-  isActive         Boolean        @default(true)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  regionalOffice     String?
+  description        String?
+  sortOrder          Int            @default(100)
+  isActive           Boolean        @default(true)
+  /// false = alias zona (DALAM_KOTA/…) — tidak muncul di form tiket
+  isTicketSelectable Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   @@index([slaZone])
   @@index([isActive, sortOrder])
+  @@index([isTicketSelectable])
   @@map("locations")
 }
 

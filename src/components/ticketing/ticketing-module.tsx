@@ -93,9 +93,9 @@ export function TicketingModule() {
   const [locations, setLocations] = useState<
     Array<{ code: string; label: string; slaZone: string }>
   >([
-    { code: "DALAM_KOTA", label: "Dalam Kota (zona)", slaZone: "DALAM_KOTA" },
-    { code: "LUAR_KOTA", label: "Luar Kota (zona)", slaZone: "LUAR_KOTA" },
-    { code: "LUAR_PULAU", label: "Luar Pulau (zona)", slaZone: "LUAR_PULAU" },
+    { code: "JKT_PUSAT", label: "Jakarta Pusat", slaZone: "DALAM_KOTA" },
+    { code: "BDG_KOTA", label: "Bandung Kota", slaZone: "LUAR_KOTA" },
+    { code: "DPS_BALI", label: "Denpasar Bali", slaZone: "LUAR_PULAU" },
   ]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<ItsmType | "ALL">("ALL");
@@ -107,7 +107,7 @@ export function TicketingModule() {
   const [itsmType, setItsmType] = useState<ItsmType>("INCIDENT");
   const [process, setProcess] = useState<OperationalProcess>("CM");
   const [merchantId, setMerchantId] = useState("");
-  const [location, setLocation] = useState<TicketLocation>("DALAM_KOTA");
+  const [location, setLocation] = useState<TicketLocation>("JKT_PUSAT");
   const [category, setCategory] = useState<TicketCategory>("VIP");
   const [vendorName, setVendorName] = useState("Vendor 1");
   const [vendorOptions, setVendorOptions] = useState<string[]>([
@@ -180,7 +180,10 @@ export function TicketingModule() {
 
   const loadLocations = useCallback(async () => {
     try {
-      const res = await fetch("/api/locations?activeOnly=1", { cache: "no-store" });
+      const res = await fetch(
+        "/api/locations?activeOnly=1&ticketSelectable=1",
+        { cache: "no-store" }
+      );
       if (!res.ok) return;
       const data = (await res.json()) as {
         locations?: Array<{ code: string; label: string; slaZone: string }>;
@@ -459,7 +462,7 @@ export function TicketingModule() {
               >
                 {locations.map((loc) => (
                   <option key={loc.code} value={loc.code}>
-                    {loc.label} ({loc.slaZone.replace(/_/g, " ")})
+                    {loc.label} · {loc.slaZone === "DALAM_KOTA" ? "Dalam Kota" : loc.slaZone === "LUAR_KOTA" ? "Luar Kota" : "Luar Pulau"}
                   </option>
                 ))}
               </select>

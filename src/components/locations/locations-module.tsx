@@ -18,6 +18,7 @@ import { REGIONAL_OFFICES } from "@/config/assets.config";
 import {
   SLA_ZONE_LABELS,
   SLA_ZONES,
+  isZoneAlias,
   type LocationDef,
   type SlaZone,
 } from "@/config/location.config";
@@ -30,6 +31,7 @@ const emptyForm = {
   description: "",
   sortOrder: 100,
   isActive: true,
+  isTicketSelectable: true,
 };
 
 export function LocationsModule() {
@@ -74,14 +76,17 @@ export function LocationsModule() {
       description: c.description ?? "",
       sortOrder: c.sortOrder,
       isActive: c.isActive,
+      isTicketSelectable: c.isTicketSelectable,
     });
   }
 
-  const isZoneAlias =
+  const editingAlias =
     !!editingId &&
-    (form.code === "DALAM_KOTA" ||
-      form.code === "LUAR_KOTA" ||
-      form.code === "LUAR_PULAU");
+    isZoneAlias({
+      code: form.code,
+      slaZone: form.slaZone,
+      isTicketSelectable: form.isTicketSelectable,
+    });
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -97,6 +102,7 @@ export function LocationsModule() {
       description: form.description || undefined,
       sortOrder: Number(form.sortOrder),
       isActive: form.isActive,
+      isTicketSelectable: form.isTicketSelectable,
     };
 
     const res = editingId
@@ -187,10 +193,9 @@ export function LocationsModule() {
       )}
 
       <p className="text-xs text-muted-foreground">
-        Setiap lokasi memetakan ke zona SLA <strong>Dalam Kota</strong> /{" "}
-        <strong>Luar Kota</strong> / <strong>Luar Pulau</strong> (matrix resolusi
-        kontrak). Kode disimpan di tiket; ubah label/zona tanpa mengubah kode yang
-        sudah dipakai.
+        <strong>Site operasional</strong> (kota/area + RO) dipilih di form tiket.
+        Alias zona (DALAM_KOTA / …) hanya untuk OLA/legacy — tidak muncul di picker
+        tiket. Matrix SLA tetap keyed by zona Dalam/Luar kota/pulau.
       </p>
 
       {canManage && (
@@ -206,7 +211,7 @@ export function LocationsModule() {
               onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
               placeholder="JKT_SELATAN"
               required
-              disabled={isZoneAlias}
+              disabled={editingAlias}
             />
           </label>
           <label className="flex flex-col gap-1 text-xs">
@@ -285,7 +290,21 @@ export function LocationsModule() {
                 setForm((f) => ({ ...f, isActive: e.target.checked }))
               }
             />
-            Aktif (muncul di form tiket)
+            Aktif
+          </label>
+          <label className="flex items-center gap-2 text-xs self-end pb-1.5">
+            <input
+              type="checkbox"
+              checked={form.isTicketSelectable}
+              disabled={editingAlias}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  isTicketSelectable: e.target.checked,
+                }))
+              }
+            />
+            Tampil di form tiket
           </label>
           <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
             <Button type="submit" size="sm">
@@ -322,6 +341,7 @@ export function LocationsModule() {
             <TableRow>
               <TableHead>Kode</TableHead>
               <TableHead>Label</TableHead>
+              <TableHead>Jenis</TableHead>
               <TableHead>Zona SLA</TableHead>
               <TableHead>RO</TableHead>
               <TableHead>Status</TableHead>
@@ -332,7 +352,7 @@ export function LocationsModule() {
             {locations.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={canManage ? 6 : 5}
+                  colSpan={canManage ? 7 : 6}
                   className="py-4 text-center text-xs text-muted-foreground"
                 >
                   Belum ada lokasi.
@@ -345,6 +365,11 @@ export function LocationsModule() {
                     {c.code}
                   </TableCell>
                   <TableCell>{c.label}</TableCell>
+                  <TableCell>
+                    <Badge variant={isZoneAlias(c) ? "outline" : "secondary"}>
+                      {isZoneAlias(c) ? "Alias zona" : "Site"}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <Badge variant="secondary">{SLA_ZONE_LABELS[c.slaZone]}</Badge>
                   </TableCell>
@@ -371,11 +396,7 @@ export function LocationsModule() {
                           type="button"
                           size="xs"
                           variant="outline"
-                          disabled={
-                            c.code === "DALAM_KOTA" ||
-                            c.code === "LUAR_KOTA" ||
-                            c.code === "LUAR_PULAU"
-                          }
+                          disabled={isZoneAlias(c)}
                           onClick={() => void onDelete(c.id)}
                         >
                           <Trash2 className="h-3 w-3" />

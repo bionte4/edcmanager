@@ -40,8 +40,11 @@ export async function GET(request: Request) {
     assertCan(user, "location:read");
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get("activeOnly") === "1";
+    const ticketSelectableOnly =
+      searchParams.get("ticketSelectable") === "1" ||
+      searchParams.get("sitesOnly") === "1";
     return NextResponse.json({
-      locations: await listLocations({ activeOnly }),
+      locations: await listLocations({ activeOnly, ticketSelectableOnly }),
     });
   } catch (e) {
     return NextResponse.json(

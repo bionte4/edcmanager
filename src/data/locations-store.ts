@@ -1,6 +1,7 @@
 import {
   DEFAULT_LOCATIONS,
   isSlaZone,
+  isZoneAlias,
   locationLabelFromCatalog,
   normalizeLocationCode,
   slaZoneFromCatalog,
@@ -27,6 +28,7 @@ function mapRow(row: PrismaLocationDef): LocationDef {
     description: row.description ?? undefined,
     sortOrder: row.sortOrder,
     isActive: row.isActive,
+    isTicketSelectable: row.isTicketSelectable,
   };
 }
 
@@ -49,6 +51,8 @@ let locationCacheWarmed = false;
 
 export async function listLocations(opts?: {
   activeOnly?: boolean;
+  /** Only operational sites (exclude zone aliases). */
+  ticketSelectableOnly?: boolean;
 }): Promise<LocationDef[]> {
   if (!locationCacheWarmed) {
     await refreshLocationCache();
@@ -56,6 +60,7 @@ export async function listLocations(opts?: {
   }
   return locations
     .filter((c) => (opts?.activeOnly ? c.isActive : true))
+    .filter((c) => (opts?.ticketSelectableOnly ? c.isTicketSelectable : true))
     .map(clone)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.code.localeCompare(b.code));
 }
@@ -84,6 +89,7 @@ export interface LocationInput {
   description?: string;
   sortOrder?: number;
   isActive?: boolean;
+  isTicketSelectable?: boolean;
 }
 
 function validate(input: LocationInput, exceptId?: string): void {
@@ -108,15 +114,20 @@ function validate(input: LocationInput, exceptId?: string): void {
 
 export async function createLocation(input: LocationInput): Promise<LocationDef> {
   validate(input);
+  const code = normalizeLocationCode(input.code);
+  const isAlias = isSlaZone(code) && code === input.slaZone;
   const row = await prisma.locationDef.create({
     data: {
-      code: normalizeLocationCode(input.code),
+      code,
       label: input.label.trim(),
       slaZone: input.slaZone,
       regionalOffice: input.regionalOffice?.trim() || null,
       description: input.description?.trim() || null,
       sortOrder: input.sortOrder ?? 100,
       isActive: input.isActive ?? true,
+      isTicketSelectable: isAlias
+        ? false
+        : (input.isTicketSelectable ?? true),
     },
   });
   await refreshLocationCache();
@@ -145,18 +156,25 @@ export async function updateLocation(
     description: input.description ?? existing.description,
     sortOrder: input.sortOrder ?? existing.sortOrder,
     isActive: input.isActive ?? existing.isActive,
+    isTicketSelectable:
+      input.isTicketSelectable ?? existing.isTicketSelectable,
   };
   validate(next, id);
+
+  const code = normalizeLocationCode(next.code);
+  const forceAlias = isSlaZone(code) && code === next.slaZone;
+
   const row = await prisma.locationDef.update({
     where: { id },
     data: {
-      code: normalizeLocationCode(next.code),
+      code,
       label: next.label.trim(),
       slaZone: next.slaZone,
       regionalOffice: next.regionalOffice?.trim() || null,
       description: next.description?.trim() || null,
       sortOrder: next.sortOrder ?? 100,
       isActive: next.isActive ?? true,
+      isTicketSelectable: forceAlias ? false : (next.isTicketSelectable ?? true),
     },
   });
   await refreshLocationCache();
@@ -174,7 +192,7 @@ export async function deleteLocation(id: string): Promise<{ soft: boolean }> {
       r ? mapRow(r) : null
     ));
   if (!row) throw new Error("Lokasi tidak ditemukan.");
-  if (isSlaZone(row.code) && row.code === row.slaZone) {
+  if (isZoneAlias(row)) {
     throw new Error(
       "Alias zona bawaan (DALAM_KOTA / LUAR_KOTA / LUAR_PULAU) tidak boleh dihapus (bisa di-nonaktifkan)."
     );
@@ -206,6 +224,7 @@ export async function resetLocations(): Promise<LocationDef[]> {
         description: c.description ?? null,
         sortOrder: c.sortOrder,
         isActive: c.isActive,
+        isTicketSelectable: c.isTicketSelectable,
       })),
     });
   });
