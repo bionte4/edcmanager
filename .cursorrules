@@ -1,0 +1,33 @@
+# EDC BRI Vendor & SLA Management System - .cursorrules
+
+> Canonical always-on rules live in `.cursor/rules/` (`alwaysApply: true`).
+> Keep this file in sync if you edit project standards.
+
+## Project Context
+You are helping an Operations Manager build a mission-critical internal web application for managing a 3-year BRI EDC (Electronic Data Capture) project. The system must strictly handle vendor management, logistic tracking (buffer stock 10%), and real-time SLA monitoring to avoid financial penalties.
+
+## Tech Stack Preferences
+- Frontend: Next.js (App Router) / React / Tailwind CSS (Clean, responsive dashboard layout).
+- Backend: Node.js (Prisma ORM) or Python (FastAPI).
+- Database: PostgreSQL (Relational for Vendors, Tickets, and Inventory).
+- UI Components: Shadcn UI + Lucide Icons for operational dashboard metrics.
+
+## Core Business Logic & Rules to Enforce
+1. **SLA Calculation Engine (Critical to Avoid Penalties):**
+   - Corrective maintenance tickets must differentiate response/resolution times based on location: `Dalam kota`, `Luar kota`, and `Luar pulau`.
+   - Pay special attention to "Dalam kota" peak hours (06.01 - 21.00) where VIP tickets require a strict **2-hour resolution window**.
+   - Build an automated escalation timer/alert flag if a ticket approaches its SLA limit (e.g., at 80% elapsed time).
+
+2. **Vendor & Performance Tracking:**
+   - Track multi-vendor metrics (e.g., Vendor 1 vs Vendor 2 allocation, deployment counts, and compliance rates).
+   - Log automated performance scoring against the 99.9% uptime requirement.
+
+3. **Inventory & Buffer Stock Control:**
+   - Monitor the 10% buffer stock requirement across Regional Offices (RO).
+   - Alert operators if stock drops below safe thresholds or if idle units need pooling/redistribution.
+
+## Coding Guidelines for AI
+- Write clean, modular, and well-documented code.
+- Implement strict error handling and input validation (especially for ticket logging and SLA inputs).
+- Do not hardcode business rules; keep them in configuration files or database models so they are easily adjustable if BRI's SLA terms change.
+- Prioritize high-contrast, data-dense UI dashboards suitable for Operation Center wall monitors (dark mode/light mode toggles).

@@ -1,0 +1,24 @@
+---
+description: BRI EDC SLA, vendor performance, and buffer stock business rules
+alwaysApply: true
+---
+
+# Core Business Rules
+
+## SLA Engine (penalty-critical)
+
+- Differentiate corrective-maintenance resolution by location: `Dalam kota`, `Luar kota`, `Luar pulau`
+- **Dalam kota + VIP + peak hours (06.01–21.00):** hard **2-hour** resolution window
+- Auto-escalate / flag at **80%** of SLA elapsed (e.g. Warning at 1h36m for a 2h limit); mark Breached when past deadline
+- Keep SLA thresholds and peak-hour windows in config/DB — not magic numbers in UI or handlers
+
+## Vendor performance
+
+- Track multi-vendor metrics: allocation, deployments, SLA compliance
+- Score against **99.9%** uptime target via daily/period metric logs
+
+## Buffer stock (logistics)
+
+- Maintain **≥10%** buffer stock per Regional Office (RO)
+- Alert when stock is below threshold or idle units should be pooled/redistributed
+- Mutation history must record deploy / recall / transfer / pooling status changes

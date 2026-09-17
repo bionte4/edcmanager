@@ -1,0 +1,293 @@
+// EDC BRI Vendor & SLA Management System
+// Prisma schema — PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum VendorType {
+  DISTRIBUTOR
+  FMS
+}
+
+enum EdcUnitStatus {
+  BUFFER
+  DEPLOYED
+  IDLE
+}
+
+enum TicketLocation {
+  DALAM_KOTA
+  LUAR_KOTA
+  LUAR_PULAU
+}
+
+enum TicketCategory {
+  VIP
+  NON_VIP
+}
+
+/// Full NOC ticketing lifecycle
+enum TicketStatus {
+  OPEN
+  ACKNOWLEDGED
+  DISPATCHED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum SlaStatus {
+  ON_TRACK
+  WARNING
+  ACHIEVED
+  BREACHED
+}
+
+enum MutationType {
+  DEPLOY
+  RECALL
+  TRANSFER
+  POOLING
+  BUFFER_TO_IDLE
+  IDLE_TO_BUFFER
+  STATUS_CHANGE
+}
+
+enum UserRole {
+  NOC
+  SUPERVISOR
+  VENDOR_TECH
+  OPS_MANAGER
+}
+
+enum ShiftType {
+  MORNING
+  AFTERNOON
+  NIGHT
+}
+
+enum ShiftDutyStatus {
+  SCHEDULED
+  ON_DUTY
+  OFF_DUTY
+}
+
+enum TicketActivityType {
+  CREATED
+  ACKNOWLEDGED
+  ASSIGNED
+  STATUS_CHANGED
+  NOTE
+  ESCALATED
+  RESOLVED
+  CLOSED
+  HANDOVER
+}
+
+// ─── User (NOC / Supervisor / Tech) ──────────────────────────────────────────
+
+/// Operations personnel who handle or supervise tickets.
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String?
+  role      UserRole
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shifts               NocShift[]
+  ticketsAsNoc         Ticket[]         @relation("TicketNocOwner")
+  ticketsCreated       Ticket[]         @relation("TicketCreatedBy")
+  activitiesPerformed  TicketActivity[]
+
+  @@index([role])
+  @@index([isActive])
+  @@map("users")
+}
+
+/// Standby / on-duty roster for NOC command center shifts.
+model NocShift {
+  id        String          @id @default(cuid())
+  userId    String
+  /// Calendar date of the shift (date-only)
+  shiftDate DateTime        @db.Date
+  shiftType ShiftType
+  status    ShiftDutyStatus @default(SCHEDULED)
+  startedAt DateTime?
+  endedAt   DateTime?
+  notes     String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, shiftDate, shiftType])
+  @@index([shiftDate, status])
+  @@index([status])
+  @@map("noc_shifts")
+}
+
+// ─── Vendor ──────────────────────────────────────────────────────────────────
+
+model Vendor {
+  id              String     @id @default(cuid())
+  name            String
+  contactName     String
+  contactEmail    String
+  contactPhone    String
+  type            VendorType
+  allocationQuota Int
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  edcUnits   EdcUnit[]
+  tickets    Ticket[]
+  metricLogs MetricLog[]
+
+  @@index([type])
+  @@index([isActive])
+  @@map("vendors")
+}
+
+// ─── EDC Unit ────────────────────────────────────────────────────────────────
+
+model EdcUnit {
+  id             String        @id @default(cuid())
+  serialNumber   String        @unique
+  brand          String
+  regionalOffice String
+  status         EdcUnitStatus @default(BUFFER)
+  merchantId     String?
+  vendorId       String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  vendor          Vendor               @relation(fields: [vendorId], references: [id])
+  mutationHistory EdcMutationHistory[]
+  tickets         Ticket[]
+
+  @@index([vendorId])
+  @@index([regionalOffice])
+  @@index([status])
+  @@index([regionalOffice, status])
+  @@map("edc_units")
+}
+
+model EdcMutationHistory {
+  id                 String         @id @default(cuid())
+  edcUnitId          String
+  mutationType       MutationType
+  fromStatus         EdcUnitStatus?
+  toStatus           EdcUnitStatus?
+  fromRegionalOffice String?
+  toRegionalOffice   String?
+  notes              String?
+  mutatedAt          DateTime       @default(now())
+  mutatedBy          String?
+
+  edcUnit EdcUnit @relation(fields: [edcUnitId], references: [id], onDelete: Cascade)
+
+  @@index([edcUnitId])
+  @@index([mutatedAt])
+  @@map("edc_mutation_history")
+}
+
+// ─── Ticket (Corrective Maintenance) ─────────────────────────────────────────
+
+model Ticket {
+  id            String          @id @default(cuid())
+  ticketNumber  String          @unique
+  merchantId    String
+  location      TicketLocation
+  category      TicketCategory
+  status        TicketStatus    @default(OPEN)
+  slaStatus     SlaStatus       @default(ON_TRACK)
+  openedAt      DateTime
+  closedAt      DateTime?
+  acknowledgedAt DateTime?
+  dispatchedAt  DateTime?
+  slaDeadlineAt DateTime?
+  description   String?
+  /// Field technician name (vendor side) when dispatched
+  technicianName String?
+  vendorId      String
+  edcUnitId     String?
+  /// NOC operator currently owning the ticket
+  nocOwnerId    String?
+  createdById   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  vendor    Vendor           @relation(fields: [vendorId], references: [id])
+  edcUnit   EdcUnit?         @relation(fields: [edcUnitId], references: [id])
+  nocOwner  User?            @relation("TicketNocOwner", fields: [nocOwnerId], references: [id])
+  createdBy User?            @relation("TicketCreatedBy", fields: [createdById], references: [id])
+  activities TicketActivity[]
+
+  @@index([vendorId])
+  @@index([edcUnitId])
+  @@index([nocOwnerId])
+  @@index([createdById])
+  @@index([location])
+  @@index([category])
+  @@index([slaStatus])
+  @@index([status])
+  @@index([openedAt])
+  @@index([merchantId])
+  @@map("tickets")
+}
+
+/// Immutable timeline of ticket actions (NOC / supervisor / tech).
+model TicketActivity {
+  id          String             @id @default(cuid())
+  ticketId    String
+  actorId     String?
+  activityType TicketActivityType
+  fromStatus  TicketStatus?
+  toStatus    TicketStatus?
+  note        String?
+  createdAt   DateTime           @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actor  User?  @relation(fields: [actorId], references: [id])
+
+  @@index([ticketId])
+  @@index([createdAt])
+  @@index([activityType])
+  @@map("ticket_activities")
+}
+
+// ─── Metric Log ──────────────────────────────────────────────────────────────
+
+model MetricLog {
+  id              String   @id @default(cuid())
+  vendorId        String
+  date            DateTime @db.Date
+  uptimePercent   Decimal  @db.Decimal(5, 2)
+  targetPercent   Decimal  @default(99.90) @db.Decimal(5, 2)
+  metTarget       Boolean
+  totalTickets    Int      @default(0)
+  resolvedTickets Int      @default(0)
+  breachedTickets Int      @default(0)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+
+  @@unique([vendorId, date])
+  @@index([date])
+  @@index([metTarget])
+  @@map("metric_logs")
+}
