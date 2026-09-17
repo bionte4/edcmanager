@@ -8,6 +8,9 @@ const PUBLIC_PATHS = [
   "/api/auth/login",
   "/api/auth/logout",
   "/api/v1",
+  "/manifest.webmanifest",
+  "/sw.js",
+  "/icons",
 ];
 
 export async function middleware(request: NextRequest) {
@@ -81,5 +84,11 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    /*
+     * Skip Next static assets and PWA public files so middleware
+     * never redirects them to /login (HTML breaks manifest/SW parsing).
+     */
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };
