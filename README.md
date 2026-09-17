@@ -4,6 +4,13 @@ Sistem operasional internal untuk proyek **EDC** (Electronic Data Capture): moni
 
 Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)
 
+## Dokumentasi
+
+| Dokumen | Isi |
+|---------|-----|
+| [Manual Guide](docs/MANUAL.md) | Cara pakai modul, RBAC, roster Excel, mobile/PWA |
+| [ERD](docs/ERD.md) | Entity Relationship Diagram (Prisma + runtime) |
+
 ## Fitur utama
 
 | Modul | Deskripsi |
@@ -113,12 +120,16 @@ PostgreSQL hanya diperlukan jika Anda ingin `db:push` / Prisma Studio. **Demo UI
 |--------|---------|
 | `/login` | Sign in |
 | `/` | Dashboard operasional |
-| `/ticketing` | Ticketing system |
+| `/ticketing` | Ticketing ITSM + SLA/OLA |
 | `/noc` | NOC standby roster |
+| `/wfm` | WFM attendance + roster Excel |
+| `/ola` | OLA policies CRUD |
+| `/reporting` | Reporting + export Excel |
+| `/assets` | Asset management + Excel |
 | `/buffer-stock` | Buffer stock logistik |
 | `/evaluasi-vendor` | Evaluasi performa vendor |
 | `/notifications` | Log SMTP / email alerts |
-| `/integration` | Dokumentasi Integration API v1 |
+| `/integration` | Integrations hub (SMTP/AI/API) |
 | `/admin/users` | Admin Users CRUD + RBAC matrix |
 
 ### Integration API (external systems)

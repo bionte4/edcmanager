@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Plus, Ticket } from "lucide-react";
+import { AlertTriangle, ChevronDown, Plus, Ticket, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,6 +65,8 @@ export function TicketingModule() {
   const [typeFilter, setTypeFilter] = useState<ItsmType | "ALL">("ALL");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   const [itsmType, setItsmType] = useState<ItsmType>("INCIDENT");
   const [process, setProcess] = useState<OperationalProcess>("CM");
@@ -238,39 +240,54 @@ export function TicketingModule() {
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+    <div className="flex flex-col gap-3 pb-16 md:pb-0">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         <Kpi title="Aktif" value={String(openCount)} />
         <Kpi title="Eskalasi SLA" value={String(escalateCount)} tone="warn" />
         <Kpi title="Eskalasi OLA" value={String(olaEscalateCount)} tone="warn" />
         <Kpi title="Incident" value={String(counts.INCIDENT)} />
-        <Kpi title="Request / Problem / Change" value={`${counts.REQUEST}/${counts.PROBLEM}/${counts.CHANGE}`} />
+        <Kpi title="Req / PRB / CHG" value={`${counts.REQUEST}/${counts.PROBLEM}/${counts.CHANGE}`} />
         <Kpi title="Total" value={String(tickets.length)} />
       </div>
 
-      <div className="flex flex-wrap gap-1">
+      <div className="flex gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {ITSM_FILTERS.map((value) => (
           <Button
             key={value}
             type="button"
-            size="xs"
+            size="sm"
+            className="h-10 shrink-0 md:h-6"
             variant={typeFilter === value ? "default" : "outline"}
             onClick={() => setTypeFilter(value)}
           >
-            {value === "ALL" ? "Semua ITSM" : ITSM_TYPE_LABELS[value]}
+            {value === "ALL" ? "Semua" : ITSM_TYPE_LABELS[value]}
           </Button>
         ))}
       </div>
 
       <div className="grid gap-3 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle className="flex items-center gap-2 text-foreground">
               <Plus className="h-4 w-4" />
               Buat Tiket ITSM
             </CardTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-10 md:hidden"
+              onClick={() => setShowCreate((v) => !v)}
+            >
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${showCreate ? "rotate-180" : ""}`}
+              />
+              {showCreate ? "Tutup" : "Buka"}
+            </Button>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
+          <CardContent
+            className={`grid gap-3 sm:grid-cols-2 ${showCreate ? "" : "hidden md:grid"}`}
+          >
             <Field label="ITSM Type">
               <select
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
@@ -351,14 +368,14 @@ export function TicketingModule() {
               </Field>
             </div>
             <div className="sm:col-span-2">
-              <Button type="button" onClick={handleCreate}>
+              <Button type="button" className="h-11 w-full sm:h-8 sm:w-auto" onClick={handleCreate}>
                 Create
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hidden md:block">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
               <Ticket className="h-4 w-4" />
@@ -371,85 +388,22 @@ export function TicketingModule() {
             </p>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <Field label="Assign NOC Owner">
-              <div className="flex gap-2">
-                <select
-                  className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm"
-                  value={assignToId}
-                  onChange={(e) => setAssignToId(e.target.value)}
-                  disabled={!selected}
-                >
-                  {nocCandidates.map((u: NocUser) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                    </option>
-                  ))}
-                </select>
-                <Button type="button" variant="outline" disabled={!selected} onClick={handleAssign}>
-                  Assign
-                </Button>
-              </div>
-            </Field>
-
-            <Field label="Nama teknisi (saat Dispatch)">
-              <input
-                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={technicianName}
-                onChange={(e) => setTechnicianName(e.target.value)}
-                placeholder="Teknisi lapangan"
-                disabled={!selected}
-              />
-            </Field>
-
-            {selected?.itsmType === "INCIDENT" && (
-              <Field label="Link ke Problem">
-                <div className="flex gap-2">
-                  <select
-                    className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm"
-                    value={linkProblemId}
-                    onChange={(e) => setLinkProblemId(e.target.value)}
-                  >
-                    {problems.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.ticketNumber}
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={!selected || problems.length === 0}
-                    onClick={handleLinkProblem}
-                  >
-                    Link
-                  </Button>
-                </div>
-              </Field>
-            )}
-
-            <div className="flex flex-wrap gap-1">
-              {(selected ? nextStatuses(selected.status) : []).map((status) => (
-                <Button
-                  key={status}
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  onClick={() => handleTransition(status)}
-                >
-                  → {TICKET_STATUS_LABELS[status]}
-                </Button>
-              ))}
-            </div>
-
-            {selected?.needsEscalation && (
-              <p className="inline-flex items-center gap-1.5 rounded-md border border-sla-warning/40 bg-sla-warning/10 px-2 py-1.5 text-xs text-sla-warning">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                SLA {SLA_LABELS[selected.slaStatus]} — eskalasi ke Supervisor
-              </p>
-            )}
-
-            {message && <p className="text-xs text-sla-safe">{message}</p>}
-            {error && <p className="text-xs text-sla-breached">{error}</p>}
+            <TicketActions
+              selected={selected}
+              assignToId={assignToId}
+              setAssignToId={setAssignToId}
+              technicianName={technicianName}
+              setTechnicianName={setTechnicianName}
+              linkProblemId={linkProblemId}
+              setLinkProblemId={setLinkProblemId}
+              nocCandidates={nocCandidates}
+              problems={problems}
+              onAssign={handleAssign}
+              onLinkProblem={handleLinkProblem}
+              onTransition={handleTransition}
+              message={message}
+              error={error}
+            />
           </CardContent>
         </Card>
       </div>
@@ -490,82 +444,144 @@ export function TicketingModule() {
         <div className="border-b border-border px-3 py-2">
           <h2 className="text-sm font-semibold tracking-wide">Antrian ITSM</h2>
           <p className="text-xs text-muted-foreground">
-            Incident (CM), Request, Problem, Change — SLA kontrak + OLA internal (Ack / Dispatch)
+            SLA kontrak + OLA Ack / Dispatch
           </p>
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Tiket</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Process</TableHead>
-              <TableHead>Merchant</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>SLA</TableHead>
-              <TableHead>OLA Ack</TableHead>
-              <TableHead>OLA Disp</TableHead>
-              <TableHead>Links</TableHead>
-              <TableHead>NOC</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visible.map((ticket) => (
-              <TableRow
-                key={ticket.id}
-                className={selectedId === ticket.id ? "bg-muted/50" : "cursor-pointer"}
-                onClick={() => setSelectedId(ticket.id)}
-              >
-                <TableCell className="font-mono text-xs font-medium">
-                  {ticket.ticketNumber}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{ITSM_TYPE_LABELS[ticket.itsmType]}</Badge>
-                </TableCell>
-                <TableCell className="text-xs">{PROCESS_LABELS[ticket.process]}</TableCell>
-                <TableCell className="font-mono text-xs">{ticket.merchantId}</TableCell>
-                <TableCell>
-                  <Badge variant="outline">{TICKET_STATUS_LABELS[ticket.status]}</Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={slaVariant(ticket.slaStatus)}>
-                    {SLA_LABELS[ticket.slaStatus]}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {ticket.olaAckStatus ? (
-                    <Badge variant={slaVariant(ticket.olaAckStatus)} title={ticket.ola.acknowledge?.policyName}>
-                      {OLA_STATUS_LABELS[ticket.olaAckStatus]}
+
+        {/* Mobile card queue */}
+        <ul className="divide-y divide-border md:hidden">
+          {visible.length === 0 ? (
+            <li className="px-3 py-6 text-center text-xs text-muted-foreground">
+              Tidak ada tiket.
+            </li>
+          ) : (
+            visible.map((ticket) => (
+              <li key={ticket.id}>
+                <button
+                  type="button"
+                  className={`flex w-full flex-col gap-1.5 px-3 py-3 text-left transition-colors ${
+                    selectedId === ticket.id ? "bg-muted/60" : "active:bg-muted/40"
+                  }`}
+                  onClick={() => {
+                    setSelectedId(ticket.id);
+                    setMobileDetailOpen(true);
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-mono text-xs font-semibold">
+                      {ticket.ticketNumber}
+                    </span>
+                    <Badge variant="outline" className="shrink-0">
+                      {TICKET_STATUS_LABELS[ticket.status]}
                     </Badge>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {ticket.olaDispatchStatus ? (
-                    <Badge
-                      variant={slaVariant(ticket.olaDispatchStatus)}
-                      title={ticket.ola.dispatch?.policyName}
-                    >
-                      {OLA_STATUS_LABELS[ticket.olaDispatchStatus]}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <Badge variant="secondary">{ITSM_TYPE_LABELS[ticket.itsmType]}</Badge>
+                    <Badge variant={slaVariant(ticket.slaStatus)}>
+                      SLA {SLA_LABELS[ticket.slaStatus]}
                     </Badge>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="font-mono text-[10px] text-muted-foreground">
-                  {ticket.problemId ? `PRB:${ticket.problemId}` : ""}
-                  {ticket.relatedChangeId ? ` CHG:${ticket.relatedChangeId}` : ""}
-                  {!ticket.problemId && !ticket.relatedChangeId ? "—" : ""}
-                </TableCell>
-                <TableCell>{ticket.nocOwnerName || "—"}</TableCell>
+                    {ticket.olaAckStatus && (
+                      <Badge variant={slaVariant(ticket.olaAckStatus)}>
+                        Ack {OLA_STATUS_LABELS[ticket.olaAckStatus]}
+                      </Badge>
+                    )}
+                    {ticket.olaDispatchStatus && (
+                      <Badge variant={slaVariant(ticket.olaDispatchStatus)}>
+                        Disp {OLA_STATUS_LABELS[ticket.olaDispatchStatus]}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="font-mono text-[11px] text-muted-foreground">
+                    {ticket.merchantId} · {ticket.nocOwnerName || "Unassigned"}
+                  </p>
+                  <p className="line-clamp-2 text-xs text-muted-foreground">
+                    {ticket.description}
+                  </p>
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+
+        {/* Desktop table */}
+        <div className="hidden overflow-x-auto md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tiket</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Process</TableHead>
+                <TableHead>Merchant</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>SLA</TableHead>
+                <TableHead>OLA Ack</TableHead>
+                <TableHead>OLA Disp</TableHead>
+                <TableHead>Links</TableHead>
+                <TableHead>NOC</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {visible.map((ticket) => (
+                <TableRow
+                  key={ticket.id}
+                  className={selectedId === ticket.id ? "bg-muted/50" : "cursor-pointer"}
+                  onClick={() => setSelectedId(ticket.id)}
+                >
+                  <TableCell className="font-mono text-xs font-medium">
+                    {ticket.ticketNumber}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{ITSM_TYPE_LABELS[ticket.itsmType]}</Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">{PROCESS_LABELS[ticket.process]}</TableCell>
+                  <TableCell className="font-mono text-xs">{ticket.merchantId}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{TICKET_STATUS_LABELS[ticket.status]}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={slaVariant(ticket.slaStatus)}>
+                      {SLA_LABELS[ticket.slaStatus]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {ticket.olaAckStatus ? (
+                      <Badge
+                        variant={slaVariant(ticket.olaAckStatus)}
+                        title={ticket.ola.acknowledge?.policyName}
+                      >
+                        {OLA_STATUS_LABELS[ticket.olaAckStatus]}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {ticket.olaDispatchStatus ? (
+                      <Badge
+                        variant={slaVariant(ticket.olaDispatchStatus)}
+                        title={ticket.ola.dispatch?.policyName}
+                      >
+                        {OLA_STATUS_LABELS[ticket.olaDispatchStatus]}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="font-mono text-[10px] text-muted-foreground">
+                    {ticket.problemId ? `PRB:${ticket.problemId}` : ""}
+                    {ticket.relatedChangeId ? ` CHG:${ticket.relatedChangeId}` : ""}
+                    {!ticket.problemId && !ticket.relatedChangeId ? "—" : ""}
+                  </TableCell>
+                  <TableCell>{ticket.nocOwnerName || "—"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </section>
 
       {selected && (
-        <section className="rounded-lg border border-border bg-card">
+        <section className="hidden rounded-lg border border-border bg-card md:block">
           <div className="border-b border-border px-3 py-2">
             <h2 className="text-sm font-semibold tracking-wide">
               Activity Log · {selected.ticketNumber}
@@ -601,7 +617,217 @@ export function TicketingModule() {
           </ul>
         </section>
       )}
+
+      {/* Mobile detail sheet */}
+      {selected && mobileDetailOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            aria-label="Tutup detail"
+            onClick={() => setMobileDetailOpen(false)}
+          />
+          <div className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-xl border border-border bg-background pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate font-mono text-xs font-semibold">
+                  {selected.ticketNumber}
+                </p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {ITSM_TYPE_LABELS[selected.itsmType]} ·{" "}
+                  {TICKET_STATUS_LABELS[selected.status]}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10"
+                onClick={() => setMobileDetailOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="space-y-3 p-3">
+              <p className="text-xs text-muted-foreground">{selected.description}</p>
+              <div className="flex flex-wrap gap-1">
+                <Badge variant={slaVariant(selected.slaStatus)}>
+                  SLA {SLA_LABELS[selected.slaStatus]}
+                </Badge>
+                {selected.olaAckStatus && (
+                  <Badge variant={slaVariant(selected.olaAckStatus)}>
+                    Ack {OLA_STATUS_LABELS[selected.olaAckStatus]}
+                  </Badge>
+                )}
+                {selected.olaDispatchStatus && (
+                  <Badge variant={slaVariant(selected.olaDispatchStatus)}>
+                    Disp {OLA_STATUS_LABELS[selected.olaDispatchStatus]}
+                  </Badge>
+                )}
+              </div>
+              <TicketActions
+                selected={selected}
+                assignToId={assignToId}
+                setAssignToId={setAssignToId}
+                technicianName={technicianName}
+                setTechnicianName={setTechnicianName}
+                linkProblemId={linkProblemId}
+                setLinkProblemId={setLinkProblemId}
+                nocCandidates={nocCandidates}
+                problems={problems}
+                onAssign={handleAssign}
+                onLinkProblem={handleLinkProblem}
+                onTransition={handleTransition}
+                message={message}
+                error={error}
+                touch
+              />
+              <div>
+                <p className="mb-1 text-xs font-semibold">Activity</p>
+                <ul className="divide-y divide-border rounded-md border border-border">
+                  {selected.activities.slice(0, 8).map((activity) => (
+                    <li key={activity.id} className="px-2.5 py-2 text-xs">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant="outline">{activity.type}</Badge>
+                        <span className="font-medium">{activity.actorName}</span>
+                      </div>
+                      <p className="mt-0.5 text-muted-foreground">{activity.note}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function TicketActions({
+  selected,
+  assignToId,
+  setAssignToId,
+  technicianName,
+  setTechnicianName,
+  linkProblemId,
+  setLinkProblemId,
+  nocCandidates,
+  problems,
+  onAssign,
+  onLinkProblem,
+  onTransition,
+  message,
+  error,
+  touch,
+}: {
+  selected: ReturnType<typeof enrichOpsTicket> | null;
+  assignToId: string;
+  setAssignToId: (v: string) => void;
+  technicianName: string;
+  setTechnicianName: (v: string) => void;
+  linkProblemId: string;
+  setLinkProblemId: (v: string) => void;
+  nocCandidates: NocUser[];
+  problems: OpsTicket[];
+  onAssign: () => void;
+  onLinkProblem: () => void;
+  onTransition: (s: WorkflowTicketStatus) => void;
+  message: string | null;
+  error: string | null;
+  touch?: boolean;
+}) {
+  const ctrl = touch ? "h-11 text-sm" : "h-9 text-sm";
+  return (
+    <>
+      <Field label="Assign NOC Owner">
+        <div className="flex gap-2">
+          <select
+            className={`${ctrl} flex-1 rounded-md border border-input bg-background px-2`}
+            value={assignToId}
+            onChange={(e) => setAssignToId(e.target.value)}
+            disabled={!selected}
+          >
+            {nocCandidates.map((u: NocUser) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            variant="outline"
+            className={touch ? "h-11" : undefined}
+            disabled={!selected}
+            onClick={onAssign}
+          >
+            Assign
+          </Button>
+        </div>
+      </Field>
+
+      <Field label="Nama teknisi (saat Dispatch)">
+        <input
+          className={`${ctrl} w-full rounded-md border border-input bg-background px-2`}
+          value={technicianName}
+          onChange={(e) => setTechnicianName(e.target.value)}
+          placeholder="Teknisi lapangan"
+          disabled={!selected}
+        />
+      </Field>
+
+      {selected?.itsmType === "INCIDENT" && (
+        <Field label="Link ke Problem">
+          <div className="flex gap-2">
+            <select
+              className={`${ctrl} flex-1 rounded-md border border-input bg-background px-2`}
+              value={linkProblemId}
+              onChange={(e) => setLinkProblemId(e.target.value)}
+            >
+              {problems.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.ticketNumber}
+                </option>
+              ))}
+            </select>
+            <Button
+              type="button"
+              variant="outline"
+              className={touch ? "h-11" : undefined}
+              disabled={!selected || problems.length === 0}
+              onClick={onLinkProblem}
+            >
+              Link
+            </Button>
+          </div>
+        </Field>
+      )}
+
+      <div className="flex flex-wrap gap-1.5">
+        {(selected ? nextStatuses(selected.status) : []).map((status) => (
+          <Button
+            key={status}
+            type="button"
+            size={touch ? "default" : "xs"}
+            className={touch ? "h-11" : undefined}
+            variant="outline"
+            onClick={() => onTransition(status)}
+          >
+            → {TICKET_STATUS_LABELS[status]}
+          </Button>
+        ))}
+      </div>
+
+      {selected?.needsEscalation && (
+        <p className="inline-flex items-center gap-1.5 rounded-md border border-sla-warning/40 bg-sla-warning/10 px-2 py-1.5 text-xs text-sla-warning">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          SLA {SLA_LABELS[selected.slaStatus]} — eskalasi ke Supervisor
+        </p>
+      )}
+
+      {message && <p className="text-xs text-sla-safe">{message}</p>}
+      {error && <p className="text-xs text-sla-breached">{error}</p>}
+    </>
   );
 }
 
@@ -617,11 +843,11 @@ function Kpi({
   return (
     <Card>
       <CardHeader className="pb-1">
-        <CardTitle>{title}</CardTitle>
+        <CardTitle className="text-[11px] sm:text-xs">{title}</CardTitle>
       </CardHeader>
       <CardContent>
         <p
-          className={`font-mono text-xl font-semibold tabular-nums ${
+          className={`font-mono text-lg font-semibold tabular-nums sm:text-xl ${
             tone === "warn" ? "text-sla-warning" : ""
           }`}
         >
