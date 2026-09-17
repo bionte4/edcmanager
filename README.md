@@ -1,6 +1,6 @@
 # EDC Manager
 
-Sistem operasional internal untuk proyek **EDC** (Electronic Data Capture): monitoring SLA corrective maintenance, buffer stock logistik, evaluasi vendor, serta ticketing NOC command center.
+Sistem operasional internal untuk proyek **EDC** (Electronic Data Capture): monitoring SLA corrective maintenance, buffer stock logistik, evaluasi vendor, ticketing NOC/LO, serta integrasi monitoring & kampanye PM/peak season.
 
 Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)
 
@@ -8,174 +8,144 @@ Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)
 
 | Dokumen | Isi |
 |---------|-----|
-| [Manual Guide](docs/MANUAL.md) | Cara pakai modul, RBAC, roster Excel, mobile/PWA |
-| [ERD](docs/ERD.md) | Entity Relationship Diagram (Prisma + runtime) |
-| [Deploy VPS](docs/DEPLOY-VPS.md) | Docker Compose + Nginx + HTTPS di VPS |
+| [Manual Guide](docs/MANUAL.md) | Cara pakai modul, RBAC, clock-stop, LO, PM/peak, dispatch |
+| [ERD](docs/ERD.md) | Entity Relationship Diagram (Prisma) |
+| [Deploy VPS](docs/DEPLOY-VPS.md) | Docker Compose + Nginx + HTTPS + cron |
+| [Prompted.md](Prompted.md) | Riwayat prompt build + roadmap ops A–E |
 
 ## Fitur utama
 
 | Modul | Deskripsi |
 |--------|-----------|
-| **Dashboard** | KPI tiket aktif, uptime vs 99.9%, mendekati breach SLA, status buffer stock RO |
-| **Ticketing** | ITSM: Incident / Request / Problem / Change + lifecycle + SLA per tipe |
-| **NOC Roster** | Standby on-duty per shift (pagi/siang/malam) + directory personil |
-| **Buffer Stock** | Distribusi cadangan EDC ≥10% per RO + mutasi/pooling |
-| **Evaluasi Vendor** | Vendor 1 vs Vendor 2: SLA compliance, resolusi, kendala operasional |
-| **SLA Engine** | Aturan SLA (Dalam Kota VIP peak 2 jam, warning 80%, laporan uptime) |
-| **Auth + RBAC** | Login session, role/permission matrix, Admin Users CRUD |
-| **Notifications** | SMTP email (assign + SLA warning/breach) dengan mode simulasi |
-| **AI Insight** | Risk score + summary + shift briefing (heuristic; LLM opsional) |
+| **Dashboard / Executive** | KPI tiket, uptime 99.9%, near-breach, buffer RO, tren MetricLog |
+| **Ticketing ITSM** | Incident / Request / Problem / Change + lifecycle + SLA/OLA |
+| **Clock-stop SLA** | Pause timer (alasan BRI); alasan sensitif butuh approval Supervisor |
+| **Near-breach 16:00** | Antrian WARNING/BREACHED + digest email harian |
+| **Workforce** | NOC roster 3 shift, WFM absensi/swap, **Liaison LO** (DOG 2 shift + handover + inbox eskalasi) |
+| **PM / Peak** | Kalender PM bulanan (REQUEST+PM) + playbook Natal/Tahun Baru/Lebaran |
+| **Dispatch cerdas** | Saran teknisi 1:25 merchant (beban + home RO + standby) |
+| **Inventori** | Assets EDC, buffer ≥10%, peripherals |
+| **Vendor** | Master + evaluasi SLA/uptime/alokasi |
+| **Integrasi** | SMTP, AI Insight, API clients, **monitoring → auto Incident** |
+| **Auth + RBAC** | Session JWT cookie + role/permission (termasuk `LIAISON`) |
 
 ## Tech stack
 
-- **Frontend:** Next.js 15 (App Router), React 19, Tailwind CSS, Shadcn-style UI, Lucide Icons
-- **Backend logic:** TypeScript (SLA engine, inventory, ticketing workflow)
-- **Auth:** Signed HTTP-only session cookie (`jose`) + RBAC permissions
-- **Database:** PostgreSQL + Prisma ORM
+- **Frontend:** Next.js 15 (App Router), React 19, Tailwind CSS, Lucide Icons
+- **Backend:** TypeScript + Prisma ORM → **PostgreSQL** (store operasional)
+- **Auth:** HTTP-only signed cookie (`jose`) + RBAC
+- **Notifikasi / cron:** SMTP + endpoint `/api/cron/*` (`CRON_SECRET`)
 
-## Prasyarat
-
-- Node.js 20+
-- PostgreSQL (untuk migrasi schema; UI demo saat ini memakai mock data)
-
-## Setup
+## Setup lokal
 
 ```bash
 git clone https://github.com/bionte4/edcmanager.git
 cd edcmanager
 npm install
 cp .env.example .env
-# Edit DATABASE_URL dan AUTH_SECRET di .env
-```
+# Set DATABASE_URL, AUTH_SECRET, opsional SMTP + CRON_SECRET
 
-Generate Prisma Client & (opsional) push schema:
-
-```bash
 npm run db:generate
 npm run db:push
-```
-
-## Menjalankan dengan Docker
-
-Prasyarat: Docker Desktop / Docker Engine + Compose v2.
-
-```bash
-cd edcmanager
-cp .env.docker.example .env   # opsional — override AUTH_SECRET / SMTP / AI
-docker compose up --build -d
-```
-
-- App: http://localhost:3000  
-- Postgres: `localhost:5432` (user/pass/db: `postgres` / `postgres` / `edcmanager`)
-
-```bash
-docker compose logs -f app   # log aplikasi
-docker compose down          # stop
-docker compose down -v       # stop + hapus volume DB
-```
-
-Stack: service `app` (Next.js standalone) + `db` (PostgreSQL 16). Entrypoint menjalankan `prisma db push` bila `DATABASE_URL` tersedia; UI demo tetap jalan dengan mock data.
-
-## Menjalankan di laptop (manual / tanpa Docker)
-
-Jalankan langsung dengan Node.js:
-
-```bash
-# 1. Prasyarat: Node.js 20+
-node -v
-
-# 2. Install dependency
-cd edcmanager
-npm install
-
-# 3. Env (opsional untuk demo UI — mock data tidak wajib DB)
-cp .env.example .env
-# Edit AUTH_SECRET jika perlu. DATABASE_URL hanya jika pakai Prisma/DB.
-
-# 4. (Opsional) Prisma client
-npm run db:generate
-
-# 5. Dev server
+npm run db:seed
 npm run dev
 ```
 
-Buka http://localhost:3000 → halaman login.
+Buka http://localhost:3000
 
-| Email | Password |
-|--------|----------|
-| `admin@edc.local` | `edc123` |
-| `andi.noc@edc.local` | `edc123` |
-| `dewi.supervisor@edc.local` | `edc123` |
-| `rudi.ops@edc.local` | `edc123` |
+### Akun demo (password `edc123`)
 
-Production lokal (tanpa Docker):
+| Email | Role |
+|--------|------|
+| `admin@edc.local` | ADMIN |
+| `andi.noc@edc.local` | NOC |
+| `dewi.supervisor@edc.local` | SUPERVISOR |
+| `rudi.ops@edc.local` | OPS_MANAGER |
+| `farah.lo@edc.local` | LIAISON |
+| `eko.tech@edc.local` | VENDOR_TECH |
+| `hendra.gm@edc.local` | GM |
 
-```bash
-npm run build
-npm run start
-```
-
-PostgreSQL hanya diperlukan jika Anda ingin `db:push` / Prisma Studio. **Demo UI saat ini memakai mock data in-memory** dan bisa jalan tanpa DB.
-
-| Route | Halaman |
-|--------|---------|
-| `/login` | Sign in |
-| `/` | Dashboard operasional |
-| `/ticketing` | Ticketing ITSM + SLA/OLA |
-| `/noc` | NOC standby roster |
-| `/wfm` | WFM attendance + roster Excel |
-| `/ola` | OLA policies CRUD |
-| `/reporting` | Reporting + export Excel |
-| `/assets` | Asset management + Excel |
-| `/buffer-stock` | Buffer stock logistik |
-| `/evaluasi-vendor` | Evaluasi performa vendor |
-| `/notifications` | Log SMTP / email alerts |
-| `/integration` | Integrations hub (SMTP/AI/API) |
-| `/admin/users` | Admin Users CRUD + RBAC matrix |
-
-### Integration API (external systems)
-
-Base: `/api/v1/tickets`  
-Auth: `Authorization: Bearer <apiKey>` atau `X-Api-Key`
-
-Demo key (Service Desk): `edc_sk_demo_servicedesk_change_me`
-
-## Script berguna
+## Docker
 
 ```bash
-npm run build      # production build
-npm run sla:demo   # smoke test engine SLA
-npm run db:studio  # Prisma Studio
-npm run db:validate
+cp .env.docker.example .env
+docker compose up --build -d
 ```
 
-## Aturan bisnis (ringkas)
+App: http://localhost:3000 · Postgres: `localhost:5432`
 
-Konfigurasi ada di `src/config/` (jangan hardcode di UI):
+## Routes penting
 
-- **SLA Dalam Kota + VIP + jam sibuk (06.01–21.00 WIB):** batas resolusi **2 jam**
-- **Warning** saat elapsed ≥ **80%** limit; **Breached** jika melewati deadline
+| Route | Modul |
+|--------|--------|
+| `/` | Dashboard |
+| `/ticketing` | Ticketing + clock-stop + saran dispatch |
+| `/ops/near-breach` | Antrian near-breach 16:00 |
+| `/ops/campaigns` | PM bulanan + peak season |
+| `/ops/dispatch` | Kapasitas RO + saran teknisi |
+| `/workforce` | NOC · LO/DOG · Handover · Inbox · WFM |
+| `/inventory` | Assets / buffer / peripherals |
+| `/vendors` | Master + evaluasi |
+| `/integration` | SMTP / AI / API / monitoring ingest |
+| `/admin/users` | User CRUD |
+
+## Integration & cron API
+
+**Tickets:** `GET/POST /api/v1/tickets` — scope `tickets:read|write`  
+Demo Service Desk: `edc_sk_demo_servicedesk_change_me`
+
+**Monitoring ingest:** `POST /api/v1/monitoring/events` — scope `monitoring:ingest`  
+Demo: `edc_sk_demo_monitoring_change_me`  
+→ CRITICAL/MAJOR auto-create INCIDENT (dedup SN:alert:hari)
+
+**Cron** (header `Authorization: Bearer $CRON_SECRET`):
+
+| Endpoint | Fungsi |
+|----------|--------|
+| `/api/cron/near-breach-digest` | Digest near-breach (≥16:00 WIB) |
+| `/api/cron/pm-monthly` | Generate PM 1 tiket/RO |
+| `/api/cron/peak-intensify` | Intensifikasi peak season + email |
+
+## Aturan bisnis (config)
+
+Sumber: `src/config/` — jangan hardcode di UI.
+
+- **SLA Dalam Kota + VIP + peak 06.01–21.00 WIB:** resolusi **2 jam**
+- **Warning** ≥ **80%** elapsed; **Breached** lewat deadline
+- **Clock-stop** mengurangi elapsed efektif; alasan ★ butuh approval
 - **Uptime target:** **99.9%**
-- **Buffer stock:** minimum **10%** per Regional Office
+- **Buffer:** ≥ **10%** per RO (peak season bisa naik guidance ke 12–15%)
+- **Dispatch:** **1 teknisi : 25 merchant** (`dispatch.config.ts`)
 
 ## Struktur folder
 
 ```text
-prisma/                 # schema PostgreSQL
+prisma/                 # schema + seed PostgreSQL
 src/
-  app/                  # Next.js App Router pages
-  components/           # UI dashboard, NOC, ticketing, buffer, vendors
-  config/               # SLA, inventory, NOC shift windows
-  data/                 # mock data demo
-  lib/                  # inventory + ticketing helpers
-  sla/                  # SLA calculation engine
+  app/                  # App Router + API routes
+  components/           # UI modul
+  config/               # SLA, pause, liaison, PM, peak, dispatch, …
+  data/                 # Prisma-backed stores
+  lib/                  # auth, rbac, notifications, …
+  sla/                  # engine SLA (pause-aware)
+  ola/                  # engine OLA
+docs/                   # MANUAL, ERD, DEPLOY-VPS
+```
+
+## Script
+
+```bash
+npm run build
+npm run db:seed
+npm run db:studio
+npm run sla:demo
 ```
 
 ## Catatan
 
-- Data ticket/vendor/buffer di UI masih **mock** agar bisa didemo tanpa DB.
-- Schema Prisma sudah mencakup `Vendor`, `EdcUnit`, `Ticket`, `MetricLog`, `User`, `NocShift`, `TicketActivity`.
-- Jangan commit file `.env` (sudah di `.gitignore`).
+- Data operasional dijalankan lewat **Prisma/Postgres** (+ seed demo).
+- Jangan commit `.env`.
+- Setelah pull production: `prisma db push` (atau migrate) + seed bila perlu + set `CRON_SECRET`.
 
 ## Lisensi
 

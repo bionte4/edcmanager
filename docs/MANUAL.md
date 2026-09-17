@@ -1,34 +1,32 @@
 # EDC Manager — Manual Guide
 
-Panduan operasional untuk pengguna aplikasi **EDC Manager** (command center vendor, SLA/OLA, logistik, dan WFM).
+Panduan operasional **EDC Manager** (SLA/OLA, ticketing, LO DOG, logistik, WFM, PM/peak, dispatch).
 
-Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)
-
-Dokumentasi terkait: [ERD](./ERD.md) · [README](../README.md)
+Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)  
+Terkait: [ERD](./ERD.md) · [Deploy VPS](./DEPLOY-VPS.md) · [README](../README.md)
 
 ---
 
 ## 1. Ringkasan
 
-EDC Manager membantu tim operasi:
+Aplikasi membantu tim operasi:
 
-- Memantau **SLA** kontrak (resolusi tiket, warning 80%, breach)
-- Mengukur **OLA** internal (Acknowledge NOC & Dispatch vendor)
-- Mengelola **ticketing ITSM**, **roster/WFM**, **assets**, **buffer stock**
-- Mengevaluasi **vendor**, mengirim **notifikasi SMTP**, dan **Integration API**
-- Melihat **reporting** operasional + export Excel
+- Memantau **SLA** kontrak (warning 80%, breach, clock-stop BRI)
+- Mengukur **OLA** internal (Acknowledge & Dispatch)
+- Menjalankan **ticketing ITSM**, **NOC/WFM**, **Liaison LO**, **inventori**
+- Ritual harian **near-breach 16:00**, kampanye **PM bulanan** & **peak season**
+- **Dispatch cerdas** (rasio 1:25) + **monitoring webhook → Incident**
+- **Reporting**, notifikasi SMTP, Integration API
 
-Aplikasi bersifat **responsive / PWA-ready**: desktop (wall monitor), tablet, dan HP.
-
-> UI demo saat ini memakai data **in-memory / mock**. Schema PostgreSQL (Prisma) sudah disiapkan untuk produksi — lihat ERD.
+Data operasional disimpan di **PostgreSQL** (Prisma). UI responsive / PWA-ready.
 
 ---
 
 ## 2. Login & akses
 
-1. Buka aplikasi → `/login`
-2. Masukkan email + password
-3. Setelah login, menu menyesuaikan **role (RBAC)**
+1. Buka `/login`
+2. Email + password
+3. Menu menyesuaikan **RBAC**
 
 ### Akun demo (password: `edc123`)
 
@@ -40,182 +38,177 @@ Aplikasi bersifat **responsive / PWA-ready**: desktop (wall monitor), tablet, da
 | `budi.noc@edc.local` | NOC / L1 |
 | `dewi.supervisor@edc.local` | Supervisor |
 | `rudi.ops@edc.local` | Ops Manager |
+| `farah.lo@edc.local` | Liaison LO |
+| `gilang.lo@edc.local` | Liaison LO |
 | `eko.tech@edc.local` | Vendor Tech |
-
-Logout: tombol **Logout** di header (HP: ikon keluar).
-
----
-
-## 3. Matriks menu per role
-
-| Modul | ADMIN | OPS_MANAGER | SUPERVISOR | NOC | VENDOR_TECH |
-|--------|:-----:|:-----------:|:----------:|:---:|:-----------:|
-| Dashboard | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Ticketing | ✓ | ✓ | ✓ | ✓ | ✓ (update terbatas) |
-| NOC Roster | ✓ | — | ✓ | ✓ | — |
-| WFM | ✓ | ✓ | ✓ | — | — |
-| OLA | ✓ | ✓ CRUD | ✓ read | — | — |
-| Reporting | ✓ | ✓ + export | ✓ + export | — | — |
-| Assets | ✓ | ✓ | ✓ | — | ✓ read |
-| Buffer Stock | ✓ | ✓ | ✓ | — | ✓ read |
-| Evaluasi Vendor | ✓ | ✓ | — | — | — |
-| Notifications | ✓ | ✓ | ✓ | ✓ | — |
-| Integrations | ✓ | — | — | — | — |
-| Admin Users | ✓ | — | — | — | — |
-
-Permission keys lengkap ada di `src/config/rbac.config.ts`.
+| `rina.tech@edc.local` | Vendor Tech |
+| `hendra.gm@edc.local` | GM / BOD |
 
 ---
 
-## 4. Navigasi perangkat
+## 3. Matriks akses (ringkas)
 
-### Desktop / tablet (≥ md)
-- Nav horizontal di header
-- Tabel padat untuk antrian tiket & roster
+| Modul | ADMIN | OPS | SUP | NOC | LIAISON | TECH |
+|--------|:-----:|:---:|:---:|:---:|:-------:|:----:|
+| Dashboard | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Ticketing / near-breach | ✓ | ✓ | ✓ | ✓ | ✓ | ✓* |
+| Clock-stop | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| Approve clock-stop ★ | ✓ | ✓ | ✓ | — | — | — |
+| Workforce NOC/WFM | ✓ | ✓ | ✓ | ✓/— | — | — |
+| LO / Handover / Inbox | ✓ | ✓ | ✓ | escalate | ✓ | — |
+| PM / Peak / Dispatch | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| Inventori | ✓ | ✓ | ✓ | — | — | read |
+| Vendor / Reporting | ✓ | ✓ | ± | — | — | — |
+| Integrations | ✓ | — | — | — | — | — |
+| Admin Users | ✓ | — | — | — | — | — |
 
-### HP / mobile
-- **Bottom nav:** Home · Tiket · WFM · Notif · More
-- **Hamburger / More:** drawer semua menu sesuai RBAC
-- **Ticketing:** antrian kartu → tap → bottom sheet aksi
-- Safe-area untuk notch / home indicator
-- Bisa **Add to Home Screen** (PWA manifest)
+\* Vendor Tech: update tiket terbatas. Permission lengkap: `src/config/rbac.config.ts`.
+
+---
+
+## 4. Navigasi
+
+- **Desktop:** strip primary + Lainnya (secondary)
+- **Mobile:** bottom nav + drawer
+- **Workforce** = hub tab: NOC · LO/DOG · Handover · Inbox Eskalasi · WFM
+- **Inventory / Config / Vendors** = hub dengan sub-tab RBAC
 
 ---
 
 ## 5. Modul operasional
 
-### 5.1 Dashboard (`/`)
-KPI: tiket aktif, uptime vs **99.9%**, mendekati breach SLA, kesehatan buffer RO (≥ **10%**).
+### 5.1 Dashboard (`/`) & Executive (`/executive`)
+KPI tiket, uptime vs **99.9%**, near-breach, buffer RO (≥10%), tren dari MetricLog.
 
 ### 5.2 Ticketing (`/ticketing`)
 1. Filter ITSM: Incident / Request / Problem / Change  
-2. Buat tiket (merchant, lokasi, VIP/Non-VIP, deskripsi)  
-3. Assign NOC owner  
-4. Transisi status: `OPEN → ACKNOWLEDGED → DISPATCHED → IN_PROGRESS → RESOLVED → CLOSED`  
-5. Pantau badge **SLA** (kontrak) dan **OLA Ack / OLA Disp** (internal)  
-6. Opsional: link Incident → Problem; AI Insight + notifikasi SMTP  
+2. Buat / assign NOC / lifecycle status  
+3. Badge **SLA** + **OLA Ack/Disp**  
+4. **Clock-stop / Resume** (permission `ticket:sla_pause`)  
+5. Alasan ★ (force majeure, BRI hold, mass outage, lainnya) → **PENDING** sampai Supervisor approve  
+6. Chip **saran teknisi** (dispatch score) saat Dispatch  
 
-**SLA penting:** Dalam Kota + VIP + peak **06.01–21.00 WIB** → resolusi **2 jam**. Warning di **80%** elapsed.
+**SLA:** Dalam Kota + VIP + peak **06.01–21.00 WIB** → **2 jam**. Warning **80%**. Elapsed = wall-clock − pause efektif.
 
-### 5.3 NOC Roster (`/noc`)
-Lihat personil & status duty shift pagi/siang/malam.
+### 5.3 Near-breach 16:00 (`/ops/near-breach`)
+Antrian WARNING/BREACHED (exclude clock-stopped).  
+Tombol **Kirim digest** → email Supervisor/Ops/NOC.  
+Cron: `POST /api/cron/near-breach-digest` + `CRON_SECRET`.
 
-### 5.4 WFM (`/wfm`)
-- Kehadiran otomatis saat **login** NOC/Supervisor yang ber-roster  
-- Tukar shift + approval (Supervisor / Ops / Admin)  
-- Roster **mingguan / bulanan** via Excel  
+### 5.4 Workforce (`/workforce`)
+- **NOC Roster** — shift pagi/siang/malam  
+- **LO / DOG** — 2 shift (07–19 / 19–07), on/off duty  
+- **Handover** — ringkasan + ACK; mirror activity `HANDOVER` di tiket  
+- **Inbox Eskalasi** — tiket SLA/OLA butuh perhatian; aksi **Eskalasi LO**  
+- **WFM** — absensi login, swap, roster Excel  
 
-**Format Excel roster**
+### 5.5 PM & Peak Season (`/ops/campaigns`)
+- **Generate PM bulan ini** → 1 tiket `REQUEST`+`PM` per Regional Office (idempotent)  
+- Playbook **Tahun Baru / Lebaran / Natal** — checklist + buffer floor + **Jalankan intensifikasi** (email)  
+- Cron: `/api/cron/pm-monthly`, `/api/cron/peak-intensify`  
+- Tanggal peak: `src/config/peak-season.config.ts` (update tiap tahun)
 
-| Kolom | Contoh | Keterangan |
-|--------|--------|------------|
-| `shiftDate` | `2026-09-17` | YYYY-MM-DD |
-| `email` | `andi.noc@edc.local` | User aktif NOC/SUPERVISOR |
-| `shiftType` | `MORNING` | `MORNING` / `AFTERNOON` / `NIGHT` |
-| `status` | `SCHEDULED` | opsional |
-| `notes` | … | opsional |
+### 5.6 Dispatch cerdas (`/ops/dispatch`)
+Target **1 teknisi : 25 merchant**.  
+Skor = beban open ticket + home RO + standby.  
+Board kapasitas per RO (understaffed / overload).  
+Home RO teknisi: `src/config/dispatch.config.ts`.
 
-Mode import: **Merge** (upsert) atau **Replace** (hapus dulu rentang tanggal file).  
-Upload membutuhkan `noc:manage_shift` atau `wfm:approve`.
+### 5.7 Inventori
+- `/inventory` hub → Assets, Buffer Stock, Peripherals  
+- Buffer alert &lt; **10%**; mutasi deploy/recall/transfer/pooling  
 
-### 5.5 OLA (`/ola`)
-Policy jam internal **Acknowledge** & **Dispatch**. Match paling spesifik + priority tertinggi menang. CRUD: Admin / Ops Manager.
+### 5.8 Vendor (`/vendors`)
+Master vendor + evaluasi SLA %, uptime, alokasi.
 
-### 5.6 Reporting (`/reporting`)
-Snapshot SLA/OLA, vendor, buffer, WFM. Export Excel multi-sheet (`report:export`).
-
-### 5.7 Assets (`/assets`)
-Master unit EDC + mutasi status. Excel import/export: `serialNumber | brand | regionalOffice | status | merchantId | vendorName | notes`.
-
-### 5.8 Buffer Stock (`/buffer-stock`)
-Pantau % buffer per RO; alert jika &lt; 10%. Mutasi deploy / recall / transfer / pooling.
-
-### 5.9 Evaluasi Vendor (`/evaluasi-vendor`)
-Bandingkan Vendor 1 vs Vendor 2: SLA %, resolusi, breach, uptime, allocation.
+### 5.9 Config (`/config`)
+OLA policies, ticket categories, locations (zona SLA + site Level A).
 
 ### 5.10 Notifications (`/notifications`)
-Log email assign / SLA warning / breach (mode simulasi atau SMTP nyata).
+Log email: assign, SLA, DIGEST (near-breach / peak), test SMTP.
 
 ### 5.11 Integrations (`/integration`) — Admin
-Kartu Email / SMTP / AI / API Clients. CRUD client + API key untuk sistem eksternal.
-
-**Integration API v1:** `/api/v1/tickets`  
-Auth: `Authorization: Bearer <apiKey>` atau `X-Api-Key`  
-Demo key Service Desk: `edc_sk_demo_servicedesk_change_me`
+SMTP / AI / API clients + panel **Monitoring → Incident**.  
+Webhook: `POST /api/v1/monitoring/events` (scope `monitoring:ingest`).  
+Demo key: `edc_sk_demo_monitoring_change_me`.
 
 ### 5.12 Admin Users (`/admin/users`)
-CRUD user, role, aktif/nonaktif. Hanya `admin:access`.
+CRUD user + role (termasuk LIAISON).
 
 ---
 
-## 6. Aturan bisnis (sumber config)
+## 6. Aturan bisnis (config)
 
-Jangan hardcode di UI — ubah di `src/config/` atau DB:
-
-| Aturan | Nilai |
-|--------|--------|
-| Peak Dalam Kota | 06.01–21.00 Asia/Jakarta |
+| Aturan | Nilai / lokasi |
+|--------|----------------|
+| Peak Dalam Kota | 06.01–21.00 WIB · `sla.config.ts` |
 | VIP peak resolution | 2 jam |
-| Warning threshold | 80% elapsed |
-| Uptime target | 99.9% |
-| Buffer minimum | 10% per RO |
-| OLA warning | 80% (per policy) |
+| Warning | 80% elapsed |
+| Clock-stop sensitif | `sla-pause.config.ts` |
+| Near-breach audit | jam 16 WIB |
+| Uptime | 99.9% |
+| Buffer min | 10% RO |
+| Dispatch ratio | 1:25 · `dispatch.config.ts` |
+| LO shifts | DAY_DOG / NIGHT_DOG · `liaison.config.ts` |
 
 ---
 
-## 7. Alur kerja tipikal
+## 7. Alur tipikal
 
-### NOC / L1 — tiket masuk
-1. Login → absensi WFM tercatat jika ada roster hari ini  
-2. Buka Ticketing → filter Incident  
-3. Acknowledge (OLA Ack mulai dihitung dari `openedAt`)  
-4. Assign teknisi / Dispatch (OLA Disp)  
-5. Update sampai Resolved / Closed  
+### NOC — tiket CM
+1. Login (WFM punch jika ber-roster)  
+2. Ticketing → Acknowledge → Dispatch (pilih saran teknisi)  
+3. Jika hold BRI: Clock-stop (alasan biasa langsung; ★ tunggu approval)  
+4. Jam 16:00 cek `/ops/near-breach` / digest  
 
-### Supervisor — eskalasi & swap
-1. Pantau badge Warning/Breached (SLA & OLA)  
-2. Approve/reject tukar shift di WFM  
-3. Upload roster Excel mingguan/bulanan  
+### Liaison LO
+1. Tab LO/DOG → On duty  
+2. Inbox eskalasi → koordinasi / Eskalasi LO  
+3. Akhir shift → Handover + ACK penerima  
 
-### Ops Manager — kontrol performa
-1. Reporting + export  
-2. OLA policy tune  
-3. Buffer / Assets / Vendor review  
+### Supervisor
+1. Approve clock-stop ★  
+2. Approve swap WFM  
+3. Intensifikasi peak / pantau kapasitas dispatch  
+
+### Ops Manager
+1. Generate PM bulanan  
+2. Peak playbook + reporting export  
+3. Tune OLA / lokasi / kategori  
 
 ---
 
-## 8. Menjalankan aplikasi
+## 8. Menjalankan
 
-### Docker
 ```bash
-cp .env.docker.example .env   # opsional
-docker compose up --build -d
-# http://localhost:3000
-```
-
-### Lokal (Node 20+)
-```bash
-npm install
-cp .env.example .env
+# Lokal
+npm install && cp .env.example .env
+npm run db:generate && npm run db:push && npm run db:seed
 npm run dev
+
+# Docker
+cp .env.docker.example .env
+docker compose up --build -d
 ```
 
-Detail env, Prisma, dan script: lihat [README](../README.md).
+Env penting: `DATABASE_URL`, `AUTH_SECRET`, SMTP opsional, `CRON_SECRET` untuk job terjadwal.
 
 ---
 
-## 9. Troubleshooting singkat
+## 9. Troubleshooting
 
 | Gejala | Cek |
 |--------|-----|
-| Menu kosong setelah login | Refresh / pastikan cookie session; role punya permission |
-| Logout kembali ke app | Pastikan cookie terhapus; gunakan tombol Logout resmi |
-| Upload roster gagal | Email harus user NOC/SUPERVISOR; format tanggal YYYY-MM-DD |
-| SMTP tidak terkirim | Mode simulasi di Integrations; isi SMTP di connector settings |
-| Docker gagal | Pastikan Docker Desktop running (`docker.sock`) |
+| Menu kosong | Role/permission; refresh session |
+| Clock-stop tidak menghentikan timer | Alasan ★ masih PENDING approval |
+| Digest “already sent” | Idempotent per hari WIB; pakai Kirim ulang / `?force=1` |
+| Monitoring tidak buat tiket | Severity harus CRITICAL/MAJOR; scope `monitoring:ingest` |
+| PM generate 0 tiket baru | Sudah ada `externalTicketId` periode yang sama |
+| Dispatch understaffed | Tambah VENDOR_TECH / sesuaikan `TECH_HOME_RO` |
+| Cron 401 | Set `CRON_SECRET` + Bearer header |
 
 ---
 
-## 10. Kontak / kepemilikan
+## 10. Kepemilikan
 
-Dokumen internal proyek EDC 3 tahun. Perubahan aturan SLA/OLA melalui Ops Manager + Admin (config / policy CRUD), bukan hardcode di komponen UI.
+Dokumen internal proyek EDC 3 tahun. Perubahan aturan bisnis lewat config/DB + Ops Manager/Admin — bukan hardcode UI.

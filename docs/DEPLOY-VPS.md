@@ -1,179 +1,105 @@
 # Deploy EDC Manager di VPS
 
-Panduan step-by-step deploy produksi dengan **Docker Compose** + **Nginx** + **HTTPS (Let's Encrypt)**.
+Panduan deploy produksi: **Docker Compose** + **Nginx** + **HTTPS (Let's Encrypt)** + **cron jobs**.
 
-Asumsi OS: **Ubuntu 22.04 / 24.04 LTS**. Pola serupa untuk Debian.
+Asumsi OS: **Ubuntu 22.04 / 24.04 LTS**.
 
 ---
 
-## 0. Yang perlu disiapkan
+## 0. Persiapan
 
 | Item | Rekomendasi |
 |------|-------------|
 | VPS | 2 vCPU · 2–4 GB RAM · 20+ GB SSD |
-| OS | Ubuntu 22.04/24.04 |
-| Domain | mis. `edc.perusahaan.com` → A record ke IP VPS |
-| Akses | SSH key (jangan root password saja) |
-| Port publik | **80**, **443** (dan **22** untuk SSH) |
+| Domain | A record → IP VPS |
+| Port publik | **80**, **443**, **22** |
 
-> **Catatan penting:** UI demo masih memakai banyak data **in-memory**. Restart container app bisa mengosongkan tiket/roster/OLA runtime. Schema Postgres sudah di-push, tapi persistensi penuh ke DB masih bertahap. Untuk demo internal / UAT ini sudah cukup; untuk produksi penuh nanti data harus lewat Prisma store.
+Data operasional ada di **Postgres** (Prisma). Setelah update schema, jalankan `db push` / seed sesuai catatan rilis.
 
 ---
 
 ## 1. Siapkan VPS
 
 ```bash
-# Login
 ssh user@IP_VPS
-
-# Update
 sudo apt update && sudo apt upgrade -y
-
-# Firewall
 sudo ufw allow OpenSSH
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw enable
-sudo ufw status
-```
 
-### Install Docker
-
-```bash
-# Resmi Docker (ringkas)
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER
-# logout / login ulang agar group docker aktif
-docker --version
-docker compose version
-```
+# re-login
 
-### Install Nginx + Certbot
-
-```bash
 sudo apt install -y nginx certbot python3-certbot-nginx
 ```
 
 ---
 
-## 2. Clone repo & env produksi
+## 2. Clone & env
 
 ```bash
 sudo mkdir -p /opt/edcmanager
 sudo chown $USER:$USER /opt/edcmanager
 cd /opt/edcmanager
-
 git clone https://github.com/bionte4/edcmanager.git .
-# atau: git clone ... edcmanager && cd edcmanager
-```
-
-Buat file `.env` (jangan commit):
-
-```bash
 cp .env.docker.example .env
 nano .env
 ```
 
-Isi minimal yang **wajib diganti**:
+Isi minimal:
 
 ```env
-# Generate: openssl rand -base64 48
-AUTH_SECRET=GANTI_DENGAN_SECRET_PANJANG_ACAK
+AUTH_SECRET=<openssl rand -base64 48>
+POSTGRES_PASSWORD=<password kuat>
+APP_URL=https://edc.perusahaan.com
 
-# Password Postgres kuat
-POSTGRES_PASSWORD=GANTI_PASSWORD_DB_KUAT
-
-# Opsional SMTP
-SMTP_HOST=smtp.contoh.com
+# SMTP (opsional — tanpa ini email SIMULATED ke NotificationLog)
+SMTP_HOST=
 SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=...
-SMTP_PASS=...
+SMTP_USER=
+SMTP_PASS=
 SMTP_FROM=EDC Manager <noreply@domain.com>
+NOTIFY_SUPERVISOR_EMAIL=...
+NOTIFY_OPS_EMAIL=...
+NOTIFY_NOC_EMAIL=...
 
-# AI (opsional)
+# Cron jobs (wajib untuk digest / PM / peak)
+CRON_SECRET=<openssl rand -hex 32>
+
 AI_INSIGHTS_ENABLED=true
 AI_PROVIDER=heuristic
-# AI_PROVIDER=openai
-# AI_API_KEY=sk-...
-# AI_MODEL=gpt-4o-mini
+```
+
+Entrypoint image biasanya menjalankan `prisma db push` saat start. Setelah pull fitur baru:
+
+```bash
+docker compose exec app npx prisma db push
+docker compose exec app npm run db:seed   # opsional / pertama kali
 ```
 
 ---
 
-## 3. Hardening Docker untuk VPS
+## 3. Docker Compose produksi
 
-Edit `docker-compose.yml` (atau buat override) agar:
-
-1. **Postgres tidak terbuka ke internet** (hanya jaringan internal Docker / localhost)
-2. **Password DB** dari `.env`
-3. App tetap di port 3000 **hanya lokal** (Nginx yang expose 443)
-
-Contoh override — simpan sebagai `docker-compose.prod.yml`:
-
-```yaml
-services:
-  db:
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: edcmanager
-    # Jangan publish 5432 ke 0.0.0.0 — hapus mapping publik
-    ports: []
-    # Jika butuh akses admin dari VPS saja, ganti jadi:
-    # ports:
-    #   - "127.0.0.1:5432:5432"
-
-  app:
-    ports:
-      - "127.0.0.1:3000:3000"
-    environment:
-      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/edcmanager?schema=public
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-EDC Manager <noreply@edc.local>}
-      AI_INSIGHTS_ENABLED: ${AI_INSIGHTS_ENABLED:-true}
-      AI_PROVIDER: ${AI_PROVIDER:-heuristic}
-      AI_API_KEY: ${AI_API_KEY:-}
-      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
-```
-
-> **Port app:** `docker-compose.yml` mem-bind `127.0.0.1:3000` (aman di belakang Nginx).  
-> **Port DB di VPS:** `docker-compose.prod.yml` memakai `ports: !reset []` agar Postgres tidak punya mapping host.  
-> Jika Compose lama gagal dengan `!reset`, hapus saja blok `ports` pada service `db` di `docker-compose.yml`.
-
-### Build & jalankan
-
-Port app sudah di-bind ke `127.0.0.1:3000` di `docker-compose.yml`. Pastikan setelah `up`, kolom PORTS menampilkan `127.0.0.1:3000->3000/tcp` (bukan hanya `3000/tcp`).
+Gunakan override agar DB tidak publik dan app hanya di localhost:
 
 ```bash
-cd /opt/edcmanager
-
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
-
-# Cek — PORTS app harus: 127.0.0.1:3000->3000/tcp
-docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
-curl -I http://127.0.0.1:3000
-docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f --tail=80 app
+docker compose ps
+curl -I http://127.0.0.1:3000/login
 ```
 
-Login demo: `admin@edc.local` / `edc123` — **ganti password user via Admin Users** setelah go-live.
+Pastikan PORTS app: `127.0.0.1:3000->3000/tcp`.
+
+Login awal: `admin@edc.local` / `edc123` — **ganti password** via Admin Users.
+
+Pastikan `CRON_SECRET` ikut di environment service `app` (docker-compose / `.env`).
 
 ---
 
-## 4. Nginx reverse proxy
-
-Buat site:
-
-```bash
-sudo nano /etc/nginx/sites-available/edcmanager
-```
-
-Isi (ganti domain):
+## 4. Nginx + HTTPS
 
 ```nginx
 server {
@@ -194,123 +120,98 @@ server {
 }
 ```
 
-Aktifkan:
-
 ```bash
 sudo ln -sf /etc/nginx/sites-available/edcmanager /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### HTTPS (Let's Encrypt)
-
-```bash
-# Pastikan DNS A record sudah mengarah ke IP VPS
+sudo nginx -t && sudo systemctl reload nginx
 sudo certbot --nginx -d edc.perusahaan.com
-
-# Auto-renew sudah biasanya terpasang:
-sudo certbot renew --dry-run
 ```
-
-Buka: `https://edc.perusahaan.com`
 
 ---
 
-## 5. Update versi baru dari GitHub
+## 5. Cron (host atau container)
+
+Jadwalkan dari **host** (curl ke app lokal) atau cron container. Contoh crontab host (WIB = UTC+7):
+
+```cron
+# Near-breach digest ~16:05 WIB = 09:05 UTC
+5 9 * * * curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  http://127.0.0.1:3000/api/cron/near-breach-digest >/dev/null
+
+# PM bulanan — tanggal 1 jam 01:00 WIB = 18:00 UTC hari sebelumnya
+0 18 28-31 * * [ "$(date -d tomorrow +\%d)" = "01" ] && \
+  curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  http://127.0.0.1:3000/api/cron/pm-monthly
+
+# Peak intensify — setiap hari 08:00 WIB = 01:00 UTC
+0 1 * * * curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  http://127.0.0.1:3000/api/cron/peak-intensify >/dev/null
+```
+
+Export `CRON_SECRET` di environment cron user, atau hardcode sementara (kurang aman).
+
+Uji manual:
+
+```bash
+curl -sS -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  "http://127.0.0.1:3000/api/cron/near-breach-digest?ignoreWindow=1&force=1"
+```
+
+---
+
+## 6. Update dari GitHub
 
 ```bash
 cd /opt/edcmanager
 git pull origin main
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+docker compose exec app npx prisma db push
+# docker compose exec app npm run db:seed   # hanya jika perlu data demo baru
 docker compose logs -f --tail=100 app
 ```
 
 ---
 
-## 6. Backup & restore (Postgres)
+## 7. Backup Postgres
 
 ```bash
-# Backup
 docker compose exec -T db pg_dump -U postgres edcmanager > backup-$(date +%F).sql
-
-# Restore
 cat backup-YYYY-MM-DD.sql | docker compose exec -T db psql -U postgres edcmanager
 ```
 
-Volume data: `edcmanager_pgdata` (lihat `docker volume ls`).
+---
+
+## 8. Checklist go-live
+
+- [ ] `AUTH_SECRET` & `POSTGRES_PASSWORD` kuat  
+- [ ] `CRON_SECRET` set + crontab aktif  
+- [ ] Port 5432 tidak publik; app hanya `127.0.0.1:3000`  
+- [ ] HTTPS + `X-Forwarded-Proto`  
+- [ ] Password demo diganti  
+- [ ] Rotasi API key Integration / monitoring  
+- [ ] SMTP production diuji  
+- [ ] `prisma db push` setelah rilis schema baru  
 
 ---
 
-## 7. Checklist keamanan go-live
-
-- [ ] `AUTH_SECRET` unik & panjang  
-- [ ] `POSTGRES_PASSWORD` kuat; port **5432 tidak publik**  
-- [ ] App hanya di `127.0.0.1:3000`; publik lewat **443**  
-- [ ] UFW: hanya 22 / 80 / 443  
-- [ ] HTTPS aktif (Certbot)  
-- [ ] Ganti password akun demo (`edc123`)  
-- [ ] Rotasi Integration API key demo  
-- [ ] SMTP produksi diuji (Integrations → test)  
-- [ ] Monitor disk: `df -h` · log: `docker compose logs`
-
----
-
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Gejala | Tindakan |
 |--------|----------|
-| `curl … Connection reset by peer` | App baru start / sedang restart. Cek `docker compose ps` (PORTS harus `127.0.0.1:3000->3000/tcp`), tunggu "Ready", lalu `curl -I http://127.0.0.1:3000/login`. Kalau PORTS kosong: `up -d --force-recreate app` |
-| `curl 127.0.0.1:3000` gagal | `docker compose ps` · `logs app` · rebuild |
-| `Cannot find module 'effect'` di log Prisma | Non-blocking (UI tetap jalan). Pull image terbaru yang menyertakan deps Prisma CLI, lalu rebuild |
-| 502 Bad Gateway | App belum ready; cek proxy_pass & container health |
-| Certbot gagal | DNS belum propagate; port 80 terbuka; `server_name` benar |
-| DB connection error | Password `.env` vs `DATABASE_URL`; `db` healthy? |
-| Menu kosong setelah login | Cookie Secure di HTTPS — pastikan `X-Forwarded-Proto` di Nginx |
-| Out of memory saat build | Naikkan RAM VPS / tambah swap 2GB |
-
-Tambah swap (jika build OOM):
-
-```bash
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-```
+| 502 | App belum ready; cek `docker compose logs app` |
+| Menu kosong | Cookie Secure + `X-Forwarded-Proto` |
+| Cron 401 | `CRON_SECRET` mismatch / tidak di-inject ke container |
+| Schema error | `npx prisma db push` di dalam container app |
+| Digest kosong | Di luar jendela 16:00 — pakai `?ignoreWindow=1` untuk uji |
+| OOM build | Tambah swap 2G |
 
 ---
 
-## 9. Arsitektur singkat
+## 10. Arsitektur
 
 ```text
-Internet
-   │
-   ▼
- Nginx :443 (TLS)
-   │
-   ▼
- App container :3000  ──►  Postgres container :5432 (internal)
+Internet → Nginx :443 → App :3000 → Postgres :5432 (internal)
+                ↑
+         host cron (curl + CRON_SECRET)
 ```
 
----
-
-## 10. Perintah cepat
-
-```bash
-# Status
-docker compose ps
-
-# Log
-docker compose logs -f app
-docker compose logs -f db
-
-# Stop / start
-docker compose stop
-docker compose start
-
-# Hapus stack (HATI-HATI: -v menghapus volume DB)
-docker compose down
-# docker compose down -v
-```
-
-Dokumen terkait: [Manual](./MANUAL.md) · [ERD](./ERD.md) · [README](../README.md)
+Dokumen: [Manual](./MANUAL.md) · [ERD](./ERD.md) · [README](../README.md)
