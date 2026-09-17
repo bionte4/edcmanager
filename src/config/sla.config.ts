@@ -1,12 +1,20 @@
 /**
  * EDC SLA & uptime configuration.
  * Adjust these values when contract terms change; do not hardcode elsewhere.
+ *
+ * Ticket priority codes (VIP, NON_VIP, custom) are managed via ticket-category CRUD.
+ * This file keeps the SLA *profiles* that categories map into.
  */
 
 export type TicketLocation = "DALAM_KOTA" | "LUAR_KOTA" | "LUAR_PULAU";
-export type TicketCategory = "VIP" | "NON_VIP";
 
-/** Peak-hour window for Dalam Kota VIP (local time, inclusive start / exclusive end minutes-of-day). */
+/** Category code on a ticket — open string; catalog in ticket-category.config / store. */
+export type TicketCategory = string;
+
+/** SLA matrix profile (categories map here via slaProfile). */
+export type SlaProfile = "VIP" | "NON_VIP";
+
+/** Peak-hour window for Dalam Kota VIP profile (local time). */
 export const PEAK_HOURS = {
   /** 06:01 */
   startMinutes: 6 * 60 + 1,
@@ -16,15 +24,13 @@ export const PEAK_HOURS = {
 } as const;
 
 /**
- * Resolution SLA limits in minutes, keyed by location → category.
- * Dalam Kota VIP during peak hours uses `peakMinutes` (strict 2 hours per SLA policy).
+ * Resolution SLA limits in minutes, keyed by location → slaProfile.
+ * Dalam Kota VIP during peak hours uses `peakMinutes` (strict 2 hours).
  */
 export const RESOLUTION_SLA_MINUTES = {
   DALAM_KOTA: {
     VIP: {
-      /** Peak 06.01–21.00: max 2 hours */
       peakMinutes: 2 * 60,
-      /** Outside peak: default off-peak window (adjustable) */
       offPeakMinutes: 4 * 60,
     },
     NON_VIP: {
@@ -42,10 +48,7 @@ export const RESOLUTION_SLA_MINUTES = {
   },
 } as const satisfies Record<
   TicketLocation,
-  Record<
-    TicketCategory,
-    { peakMinutes: number; offPeakMinutes: number }
-  >
+  Record<SlaProfile, { peakMinutes: number; offPeakMinutes: number }>
 >;
 
 /** Fraction of SLA elapsed that triggers WARNING (e.g. 0.8 → 1h36m on a 2h limit). */

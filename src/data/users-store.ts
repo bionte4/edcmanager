@@ -71,6 +71,16 @@ const seed: ManagedUser[] = [
     createdAt: new Date().toISOString(),
   },
   {
+    id: "u-gm-1",
+    name: "Hendra Wijaya",
+    email: "hendra.gm@edc.local",
+    phone: "0812-9999-0001",
+    role: "GM",
+    isActive: true,
+    password: DEMO_PASSWORD,
+    createdAt: new Date().toISOString(),
+  },
+  {
     id: "u-tech-1",
     name: "Eko Teknisi",
     email: "eko.tech@edc.local",

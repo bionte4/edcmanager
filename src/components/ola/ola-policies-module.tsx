@@ -25,7 +25,6 @@ import { CATEGORY_LABELS, LOCATION_LABELS } from "@/data/dashboard";
 const STAGES: OlaStage[] = ["ACKNOWLEDGE", "DISPATCH"];
 const ITSM_OPTS = ["*", "INCIDENT", "REQUEST", "PROBLEM", "CHANGE"] as const;
 const LOC_OPTS = ["*", "DALAM_KOTA", "LUAR_KOTA", "LUAR_PULAU"] as const;
-const CAT_OPTS = ["*", "VIP", "NON_VIP"] as const;
 const PROC_OPTS = [
   "*",
   "CM",
@@ -38,11 +37,14 @@ const PROC_OPTS = [
   "EMERGENCY_CHANGE",
 ] as const;
 
-function matchLabel(value: string): string {
+function matchLabel(
+  value: string,
+  catLabels: Record<string, string> = CATEGORY_LABELS
+): string {
   if (value === "*") return "Semua";
   if (value in ITSM_TYPE_LABELS) return ITSM_TYPE_LABELS[value as keyof typeof ITSM_TYPE_LABELS];
   if (value in LOCATION_LABELS) return LOCATION_LABELS[value as keyof typeof LOCATION_LABELS];
-  if (value in CATEGORY_LABELS) return CATEGORY_LABELS[value as keyof typeof CATEGORY_LABELS];
+  if (value in catLabels) return catLabels[value]!;
   if (value in PROCESS_LABELS) return PROCESS_LABELS[value as keyof typeof PROCESS_LABELS];
   return value;
 }
@@ -64,6 +66,10 @@ export function OlaPoliciesModule() {
   const { can } = useAuth();
   const canManage = can("ola:manage");
   const [policies, setPolicies] = useState<OlaPolicy[]>([]);
+  const [catOpts, setCatOpts] = useState<string[]>(["*", "VIP", "NON_VIP"]);
+  const [catLabels, setCatLabels] = useState<Record<string, string>>({
+    ...CATEGORY_LABELS,
+  });
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -80,9 +86,28 @@ export function OlaPoliciesModule() {
     setPolicies(data.policies ?? []);
   }, []);
 
+  const loadCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/categories", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        categories?: Array<{ code: string; label: string }>;
+      };
+      const cats = data.categories ?? [];
+      if (!cats.length) return;
+      const labels: Record<string, string> = { ...CATEGORY_LABELS };
+      for (const c of cats) labels[c.code] = c.label;
+      setCatLabels(labels);
+      setCatOpts(["*", ...cats.map((c) => c.code)]);
+    } catch {
+      /* keep VIP/NON_VIP */
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadCategories();
+  }, [load, loadCategories]);
 
   function resetForm() {
     setEditingId(null);
@@ -237,8 +262,8 @@ export function OlaPoliciesModule() {
                   {p.limitMinutes}m · warn {(p.warningThreshold * 100).toFixed(0)}%
                 </TableCell>
                 <TableCell className="text-[11px] text-muted-foreground">
-                  {matchLabel(p.itsmType)} · {matchLabel(p.location)} ·{" "}
-                  {matchLabel(p.category)} · {matchLabel(p.process)}
+                  {matchLabel(p.itsmType, catLabels)} · {matchLabel(p.location, catLabels)} ·{" "}
+                  {matchLabel(p.category, catLabels)} · {matchLabel(p.process, catLabels)}
                 </TableCell>
                 <TableCell className="font-mono text-xs">{p.priority}</TableCell>
                 <TableCell>
@@ -383,9 +408,9 @@ export function OlaPoliciesModule() {
                 value={form.category}
                 onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
               >
-                {CAT_OPTS.map((v) => (
+                {catOpts.map((v) => (
                   <option key={v} value={v}>
-                    {matchLabel(v)}
+                    {matchLabel(v, catLabels)}
                   </option>
                 ))}
               </select>

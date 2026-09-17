@@ -28,11 +28,20 @@ function statusFor(e: unknown): number {
   return 400;
 }
 
-export async function GET() {
+function periodFromUrl(url: URL) {
+  const from = url.searchParams.get("from") ?? undefined;
+  const to = url.searchParams.get("to") ?? undefined;
+  const label = url.searchParams.get("label") ?? undefined;
+  if (!from || !to) return undefined;
+  return { from, to, label };
+}
+
+export async function GET(request: Request) {
   try {
     const user = await requireUser();
     assertCan(user, "report:read");
-    const report = buildOpsReport(DEMO_AS_OF);
+    const period = periodFromUrl(new URL(request.url));
+    const report = buildOpsReport(DEMO_AS_OF, period);
     return NextResponse.json(report);
   } catch (e) {
     return NextResponse.json(

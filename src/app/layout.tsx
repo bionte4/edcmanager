@@ -56,10 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <AuthProvider>
-            {/* SW register + install prompt (also shown in AppShell header when eligible) */}
-            <div className="pointer-events-none fixed bottom-20 right-3 z-50 md:bottom-4 [&_button]:pointer-events-auto">
-              <PwaRegister />
-            </div>
+            <PwaRegister />
             {children}
           </AuthProvider>
         </ThemeProvider>

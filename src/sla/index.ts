@@ -1,8 +1,4 @@
-/**
- * SLA Calculation Engine — EDC contract rules
- *
- * Public API for ticket duration, peak-hour VIP limits, auto-flagging, and uptime reports.
- */
+import { getCategoryLabel, getCategorySlaProfile } from "../data/ticket-categories-store";
 
 export {
   PEAK_HOURS,
@@ -14,6 +10,7 @@ export {
 export type {
   TicketLocation,
   TicketCategory,
+  SlaProfile,
 } from "../config/sla.config";
 
 export type {
@@ -42,3 +39,5 @@ export {
   sumDowntimeMinutes,
   buildMonthlyUptimeFromTickets,
 } from "./uptime";
+
+export { getCategoryLabel, getCategorySlaProfile };

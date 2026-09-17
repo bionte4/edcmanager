@@ -61,6 +61,12 @@ export function TicketingModule() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<OpsTicket[]>(MOCK_OPS_TICKETS);
   const [olaPolicies, setOlaPolicies] = useState<OlaPolicy[] | null>(null);
+  const [categories, setCategories] = useState<
+    Array<{ code: string; label: string; slaProfile: string }>
+  >([
+    { code: "VIP", label: "VIP", slaProfile: "VIP" },
+    { code: "NON_VIP", label: "Non-VIP", slaProfile: "NON_VIP" },
+  ]);
   const [selectedId, setSelectedId] = useState<string | null>(MOCK_OPS_TICKETS[0]?.id ?? null);
   const [typeFilter, setTypeFilter] = useState<ItsmType | "ALL">("ALL");
   const [error, setError] = useState<string | null>(null);
@@ -90,9 +96,30 @@ export function TicketingModule() {
     }
   }, []);
 
+  const loadCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/categories?activeOnly=1", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        categories?: Array<{ code: string; label: string; slaProfile: string }>;
+      };
+      if (data.categories?.length) {
+        setCategories(data.categories);
+        setCategory((prev) =>
+          data.categories!.some((c) => c.code === prev)
+            ? prev
+            : data.categories![0]!.code
+        );
+      }
+    } catch {
+      /* keep VIP/NON_VIP fallback */
+    }
+  }, []);
+
   useEffect(() => {
     void loadOla();
-  }, [loadOla]);
+    void loadCategories();
+  }, [loadOla, loadCategories]);
 
   const actor: NocUser | null = user
     ? {
@@ -353,8 +380,11 @@ export function TicketingModule() {
                 value={category}
                 onChange={(e) => setCategory(e.target.value as TicketCategory)}
               >
-                <option value="VIP">VIP</option>
-                <option value="NON_VIP">Non-VIP</option>
+                {categories.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label}
+                  </option>
+                ))}
               </select>
             </Field>
             <div className="sm:col-span-2">
@@ -588,7 +618,10 @@ export function TicketingModule() {
             </h2>
             <p className="text-xs text-muted-foreground">
               {ITSM_TYPE_LABELS[selected.itsmType]} · {PROCESS_LABELS[selected.process]} ·{" "}
-              {LOCATION_LABELS[selected.location]} · {CATEGORY_LABELS[selected.category]}
+              {LOCATION_LABELS[selected.location]} ·{" "}
+              {categories.find((c) => c.code === selected.category)?.label ??
+                CATEGORY_LABELS[selected.category] ??
+                selected.category}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">{selected.description}</p>
             <p className="mt-1 font-mono text-[11px] text-muted-foreground">

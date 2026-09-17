@@ -110,7 +110,7 @@ export function LoginForm() {
               <span className="font-mono">{DEMO_PASSWORD}</span>
               <br />
               Role lain: andi.noc@edc.local · dewi.supervisor@edc.local · rudi.ops@edc.local ·
-              eko.tech@edc.local (password sama)
+              hendra.gm@edc.local · eko.tech@edc.local (password sama)
             </p>
           </form>
         </CardContent>

@@ -218,10 +218,15 @@ export const LOCATION_LABELS: Record<TicketLocation, string> = {
   LUAR_PULAU: "Luar Pulau",
 };
 
-export const CATEGORY_LABELS: Record<TicketCategory, string> = {
+export const CATEGORY_LABELS: Record<string, string> = {
   VIP: "VIP",
   NON_VIP: "Non-VIP",
 };
+
+/** Resolve display label for a ticket category code (falls back to code). */
+export function categoryLabel(code: string): string {
+  return CATEGORY_LABELS[code] ?? code;
+}
 
 export const SLA_LABELS: Record<SlaEvaluationStatus, string> = {
   ON_TRACK: "Aman",

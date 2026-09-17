@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Filter } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,14 +17,13 @@ import {
   LOCATION_LABELS,
   SLA_LABELS,
   type EnrichedTicket,
-  type TicketCategory,
   type TicketLocation,
 } from "@/data/dashboard";
 import { formatDateTime } from "@/lib/utils";
 import type { SlaEvaluationStatus } from "@/sla";
 
 type LocationFilter = TicketLocation | "ALL";
-type CategoryFilter = TicketCategory | "ALL";
+type CategoryFilter = string;
 
 function slaBadgeVariant(
   status: SlaEvaluationStatus
@@ -43,11 +42,33 @@ function slaBadgeVariant(
 }
 
 const LOCATIONS: LocationFilter[] = ["ALL", "DALAM_KOTA", "LUAR_KOTA", "LUAR_PULAU"];
-const CATEGORIES: CategoryFilter[] = ["ALL", "VIP", "NON_VIP"];
 
 export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
   const [location, setLocation] = useState<LocationFilter>("ALL");
   const [category, setCategory] = useState<CategoryFilter>("ALL");
+  const [categoryOptions, setCategoryOptions] = useState<
+    Array<{ code: string; label: string; slaProfile: string }>
+  >([
+    { code: "VIP", label: "VIP", slaProfile: "VIP" },
+    { code: "NON_VIP", label: "Non-VIP", slaProfile: "NON_VIP" },
+  ]);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/categories?activeOnly=1", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        categories?: Array<{ code: string; label: string; slaProfile: string }>;
+      };
+      if (data.categories?.length) setCategoryOptions(data.categories);
+    } catch {
+      /* keep defaults */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCategories();
+  }, [loadCategories]);
 
   const filtered = useMemo(() => {
     return tickets.filter((ticket) => {
@@ -56,6 +77,21 @@ export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
       return true;
     });
   }, [tickets, location, category]);
+
+  function labelFor(code: string): string {
+    return (
+      categoryOptions.find((c) => c.code === code)?.label ??
+      CATEGORY_LABELS[code] ??
+      code
+    );
+  }
+
+  function isVipProfile(code: string): boolean {
+    return (
+      categoryOptions.find((c) => c.code === code)?.slaProfile === "VIP" ||
+      code === "VIP"
+    );
+  }
 
   return (
     <section className="rounded-md border border-border bg-card">
@@ -80,15 +116,23 @@ export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
             </Button>
           ))}
           <span className="mx-1 hidden h-4 w-px bg-border sm:inline-block" />
-          {CATEGORIES.map((value) => (
+          <Button
+            type="button"
+            size="xs"
+            variant={category === "ALL" ? "default" : "outline"}
+            onClick={() => setCategory("ALL")}
+          >
+            Semua Kategori
+          </Button>
+          {categoryOptions.map((opt) => (
             <Button
-              key={value}
+              key={opt.code}
               type="button"
               size="xs"
-              variant={category === value ? "default" : "outline"}
-              onClick={() => setCategory(value)}
+              variant={category === opt.code ? "default" : "outline"}
+              onClick={() => setCategory(opt.code)}
             >
-              {value === "ALL" ? "Semua Kategori" : CATEGORY_LABELS[value]}
+              {opt.label}
             </Button>
           ))}
         </div>
@@ -124,8 +168,8 @@ export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
                 <TableCell className="font-mono text-xs">{ticket.merchantId}</TableCell>
                 <TableCell>{LOCATION_LABELS[ticket.location]}</TableCell>
                 <TableCell>
-                  <Badge variant={ticket.category === "VIP" ? "default" : "secondary"}>
-                    {CATEGORY_LABELS[ticket.category]}
+                  <Badge variant={isVipProfile(ticket.category) ? "default" : "secondary"}>
+                    {labelFor(ticket.category)}
                   </Badge>
                 </TableCell>
                 <TableCell className="whitespace-nowrap font-mono text-xs">

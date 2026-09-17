@@ -28,12 +28,17 @@ function statusFor(e: unknown): number {
   return 400;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await requireUser();
     assertCan(user, "report:export");
-    const buffer = buildOpsReportWorkbook(DEMO_AS_OF);
-    const stamp = new Date().toISOString().slice(0, 10);
+    const url = new URL(request.url);
+    const from = url.searchParams.get("from") ?? undefined;
+    const to = url.searchParams.get("to") ?? undefined;
+    const label = url.searchParams.get("label") ?? undefined;
+    const period = from && to ? { from, to, label } : undefined;
+    const buffer = buildOpsReportWorkbook(DEMO_AS_OF, period);
+    const stamp = `${from ?? "all"}_${to ?? new Date().toISOString().slice(0, 10)}`;
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {

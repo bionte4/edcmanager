@@ -18,9 +18,12 @@ import {
   Package,
   Radio,
   Shield,
+  Tags,
   Ticket,
   Users,
   X,
+  Briefcase,
+  Plug,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -37,12 +40,15 @@ const NAV: Array<{
   permission: Permission;
 }> = [
   { href: "/", label: "Dashboard", shortLabel: "Home", icon: LayoutDashboard, permission: "dashboard:read" },
+  { href: "/executive", label: "Executive", shortLabel: "Exec", icon: Briefcase, permission: "executive:read" },
   { href: "/ticketing", label: "Ticketing", shortLabel: "Tiket", icon: Ticket, permission: "ticket:read" },
   { href: "/noc", label: "NOC Roster", shortLabel: "NOC", icon: Headset, permission: "noc:read" },
   { href: "/wfm", label: "WFM", icon: CalendarClock, permission: "wfm:read" },
   { href: "/ola", label: "OLA", icon: Gauge, permission: "ola:read" },
+  { href: "/categories", label: "Kategori", shortLabel: "Kat.", icon: Tags, permission: "category:read" },
   { href: "/reporting", label: "Reporting", shortLabel: "Report", icon: FileBarChart2, permission: "report:read" },
   { href: "/assets", label: "Assets", icon: Boxes, permission: "inventory:read" },
+  { href: "/peripherals", label: "Peripherals", shortLabel: "Perif.", icon: Plug, permission: "inventory:read" },
   { href: "/buffer-stock", label: "Buffer Stock", shortLabel: "Buffer", icon: Package, permission: "inventory:read" },
   { href: "/evaluasi-vendor", label: "Evaluasi Vendor", shortLabel: "Vendor", icon: Users, permission: "vendor:read" },
   { href: "/notifications", label: "Notifications", shortLabel: "Notif", icon: Bell, permission: "notification:read" },

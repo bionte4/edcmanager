@@ -32,7 +32,14 @@ interface AdminUserRow {
   createdAt: string;
 }
 
-const ROLES: AppRole[] = ["ADMIN", "OPS_MANAGER", "SUPERVISOR", "NOC", "VENDOR_TECH"];
+const ROLES: AppRole[] = [
+  "ADMIN",
+  "GM",
+  "OPS_MANAGER",
+  "SUPERVISOR",
+  "NOC",
+  "VENDOR_TECH",
+];
 
 export function AdminUsersModule() {
   const { can } = useAuth();

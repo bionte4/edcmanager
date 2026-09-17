@@ -6,6 +6,7 @@ import {
   type TicketLocation,
 } from "../config/sla.config";
 import { ITSM_SLA_MINUTES, type ItsmType } from "../config/itsm.config";
+import { getCategorySlaProfile } from "../data/ticket-categories-store";
 import type { ResolutionDuration, SlaLimitResult } from "./types";
 
 /**
@@ -85,8 +86,9 @@ export function getResolutionLimitMinutes(
 
   if (itsmType !== "INCIDENT") {
     const policy = ITSM_SLA_MINUTES[itsmType];
+    const profile = getCategorySlaProfile(category);
     const limitMinutes =
-      category === "VIP" && policy.vipMinutes != null
+      profile === "VIP" && policy.vipMinutes != null
         ? policy.vipMinutes
         : policy.defaultMinutes;
     const warningAtMinutes = limitMinutes * SLA_WARNING_THRESHOLD;
@@ -100,9 +102,10 @@ export function getResolutionLimitMinutes(
     };
   }
 
-  const rules = RESOLUTION_SLA_MINUTES[location]?.[category];
+  const profile = getCategorySlaProfile(category);
+  const rules = RESOLUTION_SLA_MINUTES[location]?.[profile];
   if (!rules) {
-    throw new Error(`No SLA rule configured for ${location} / ${category}`);
+    throw new Error(`No SLA rule configured for ${location} / profile ${profile}`);
   }
 
   const peak = isPeakHours(openedAt);

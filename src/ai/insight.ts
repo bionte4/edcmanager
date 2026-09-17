@@ -1,5 +1,6 @@
 import { AI_CONFIG, isLlmConfigured } from "@/config/ai.config";
 import { getAiSettings } from "@/data/connector-settings-store";
+import { getCategorySlaProfile } from "@/data/ticket-categories-store";
 import type { ItsmType } from "@/config/itsm.config";
 
 export interface InsightTicketInput {
@@ -40,7 +41,7 @@ export function computeSlaRiskScore(ticket: InsightTicketInput): number {
   let score = 20;
 
   if (ticket.itsmType === "INCIDENT") score += 15;
-  if (ticket.category === "VIP") score += 20;
+  if (getCategorySlaProfile(ticket.category) === "VIP") score += 20;
   if (ticket.location === "DALAM_KOTA") score += 5;
   if (ticket.needsEscalation) score += 25;
   if (ticket.slaStatus === "WARNING") score += 20;
@@ -79,7 +80,11 @@ function heuristicInsight(ticket: InsightTicketInput): AiInsightResult {
     recommendations.push("Lanjutkan proses normal; pastikan acknowledge < 15 menit.");
   }
 
-  if (ticket.itsmType === "INCIDENT" && !ticket.problemId && ticket.category === "VIP") {
+  if (
+    ticket.itsmType === "INCIDENT" &&
+    !ticket.problemId &&
+    getCategorySlaProfile(ticket.category) === "VIP"
+  ) {
     recommendations.push("Pertimbangkan link ke Problem jika pola berulang di RO yang sama.");
   }
   if (ticket.itsmType === "REQUEST") {

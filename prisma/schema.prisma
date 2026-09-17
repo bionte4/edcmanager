@@ -87,6 +87,7 @@ enum UserRole {
   SUPERVISOR
   VENDOR_TECH
   OPS_MANAGER
+  GM
 }
 
 enum ShiftType {
