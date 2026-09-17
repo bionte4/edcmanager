@@ -55,10 +55,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   const logout = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    setUser(null);
-    setPermissions([]);
-    window.location.href = "/login";
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Server may be down — still clear local session and redirect.
+    } finally {
+      setUser(null);
+      setPermissions([]);
+      window.location.href = "/login";
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(
