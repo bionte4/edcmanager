@@ -61,9 +61,9 @@ export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
     <section className="rounded-lg border border-border bg-card">
       <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold tracking-wide">Tiket Corrective Maintenance</h2>
+          <h2 className="text-sm font-semibold tracking-wide">Tiket Operasional (ITSM)</h2>
           <p className="text-xs text-muted-foreground">
-            Filter lokasi & kategori · badge SLA dari engine SLA
+            Default Incident/CM · filter lokasi & kategori · badge SLA
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

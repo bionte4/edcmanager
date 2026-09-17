@@ -22,7 +22,7 @@ assert(limit.warningAtMinutes === 96, "80% of 120m = 96m (1h36m)");
 
 const atWarning = new Date(openedPeak.getTime() + 96 * 60 * 1000);
 const warningEval = evaluateSlaStatus(
-  { location: "DALAM_KOTA", category: "VIP", openedAt: openedPeak },
+  { location: "DALAM_KOTA", category: "VIP", itsmType: "INCIDENT", openedAt: openedPeak },
   atWarning
 );
 assert(warningEval.status === "WARNING", `expected WARNING, got ${warningEval.status}`);
@@ -64,6 +64,15 @@ const riskReport = generateMonthlyUptimeReport({
   vendorName: "Vendor 2",
 });
 assert(riskReport.riskOfPenalty === true, "50m downtime should risk penalty");
+
+const requestLimit = getResolutionLimitMinutes(
+  "DALAM_KOTA",
+  "NON_VIP",
+  openedPeak,
+  "REQUEST"
+);
+assert(requestLimit.limitMinutes === 3 * 24 * 60, "REQUEST default SLA should be 3 days");
+assert(requestLimit.itsmType === "REQUEST", "itsmType should echo REQUEST");
 
 console.log("SLA engine smoke checks passed.");
 console.log(

@@ -5,7 +5,7 @@ export default function TicketingPage() {
   return (
     <AppShell
       title="Ticketing System"
-      description="Create, assign ke NOC standby, update lifecycle, dan monitor eskalasi SLA di activity log."
+      description="Create Incident/Request/Problem/Change, assign NOC, link incident→problem, monitor SLA per tipe."
     >
       <TicketingModule />
     </AppShell>

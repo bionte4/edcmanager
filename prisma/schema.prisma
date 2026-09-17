@@ -34,6 +34,26 @@ enum TicketCategory {
   NON_VIP
 }
 
+/// ITSM framework classification (Incident ≈ former CM tickets)
+enum ItsmType {
+  INCIDENT
+  REQUEST
+  PROBLEM
+  CHANGE
+}
+
+/// Operational process detail under an ITSM type
+enum OperationalProcess {
+  CM
+  PM
+  INSTALL
+  RELOCATE
+  INVESTIGATION
+  STANDARD_CHANGE
+  NORMAL_CHANGE
+  EMERGENCY_CHANGE
+}
+
 /// Full NOC ticketing lifecycle
 enum TicketStatus {
   OPEN
@@ -257,39 +277,56 @@ model EdcMutationHistory {
 // ─── Ticket (Corrective Maintenance) ─────────────────────────────────────────
 
 model Ticket {
-  id            String          @id @default(cuid())
-  ticketNumber  String          @unique
-  merchantId    String
-  location      TicketLocation
-  category      TicketCategory
-  status        TicketStatus    @default(OPEN)
-  slaStatus     SlaStatus       @default(ON_TRACK)
-  openedAt      DateTime
-  closedAt      DateTime?
+  id             String              @id @default(cuid())
+  ticketNumber   String              @unique
+  /// ITSM type — default INCIDENT (legacy CM corrective maintenance)
+  itsmType       ItsmType            @default(INCIDENT)
+  process        OperationalProcess  @default(CM)
+  merchantId     String
+  location       TicketLocation
+  category       TicketCategory
+  status         TicketStatus        @default(OPEN)
+  slaStatus      SlaStatus           @default(ON_TRACK)
+  openedAt       DateTime
+  closedAt       DateTime?
   acknowledgedAt DateTime?
-  dispatchedAt  DateTime?
-  slaDeadlineAt DateTime?
-  description   String?
-  /// Field technician name (vendor side) when dispatched
+  dispatchedAt   DateTime?
+  slaDeadlineAt  DateTime?
+  description    String?
   technicianName String?
-  vendorId      String
-  edcUnitId     String?
-  /// NOC operator currently owning the ticket
-  nocOwnerId    String?
-  createdById   String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  /// External system ticket id for future integrations
+  externalTicketId String?
+  externalSystem   String?
+  vendorId       String
+  edcUnitId      String?
+  nocOwnerId     String?
+  createdById    String?
+  /// Problem record that groups related incidents
+  problemId      String?
+  /// Optional linked change (fix / remediation)
+  relatedChangeId String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
-  vendor    Vendor           @relation(fields: [vendorId], references: [id])
-  edcUnit   EdcUnit?         @relation(fields: [edcUnitId], references: [id])
-  nocOwner  User?            @relation("TicketNocOwner", fields: [nocOwnerId], references: [id])
-  createdBy User?            @relation("TicketCreatedBy", fields: [createdById], references: [id])
-  activities TicketActivity[]
+  vendor         Vendor            @relation(fields: [vendorId], references: [id])
+  edcUnit        EdcUnit?          @relation(fields: [edcUnitId], references: [id])
+  nocOwner       User?             @relation("TicketNocOwner", fields: [nocOwnerId], references: [id])
+  createdBy      User?             @relation("TicketCreatedBy", fields: [createdById], references: [id])
+  problem        Ticket?           @relation("IncidentToProblem", fields: [problemId], references: [id])
+  relatedIncidents Ticket[]        @relation("IncidentToProblem")
+  relatedChange  Ticket?           @relation("TicketToChange", fields: [relatedChangeId], references: [id])
+  linkedFrom     Ticket[]          @relation("TicketToChange")
+  activities     TicketActivity[]
 
+  @@unique([externalSystem, externalTicketId])
   @@index([vendorId])
   @@index([edcUnitId])
   @@index([nocOwnerId])
   @@index([createdById])
+  @@index([itsmType])
+  @@index([process])
+  @@index([problemId])
+  @@index([relatedChangeId])
   @@index([location])
   @@index([category])
   @@index([slaStatus])

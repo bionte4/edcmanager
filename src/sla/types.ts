@@ -1,4 +1,5 @@
 import type { TicketCategory, TicketLocation } from "../config/sla.config";
+import type { ItsmType } from "../config/itsm.config";
 
 /** Runtime / closed-ticket SLA evaluation outcome. */
 export type SlaEvaluationStatus =
@@ -10,6 +11,8 @@ export type SlaEvaluationStatus =
 export interface TicketSlaInput {
   location: TicketLocation;
   category: TicketCategory;
+  /** ITSM type — defaults to INCIDENT (location/VIP peak rules) */
+  itsmType?: ItsmType;
   /** Tiket Masuk */
   openedAt: Date;
   /** Tiket Selesai — omit / null while still open */
@@ -30,6 +33,7 @@ export interface SlaLimitResult {
   isPeakHours: boolean;
   warningAtMinutes: number;
   warningAtMs: number;
+  itsmType: ItsmType;
 }
 
 export interface SlaEvaluation extends SlaLimitResult {

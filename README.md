@@ -9,7 +9,7 @@ Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)
 | Modul | Deskripsi |
 |--------|-----------|
 | **Dashboard** | KPI tiket aktif, uptime vs 99.9%, mendekati breach SLA, status buffer stock RO |
-| **Ticketing** | Create / assign NOC / lifecycle Open→Closed + activity log + flag eskalasi SLA |
+| **Ticketing** | ITSM: Incident / Request / Problem / Change + lifecycle + SLA per tipe |
 | **NOC Roster** | Standby on-duty per shift (pagi/siang/malam) + directory personil |
 | **Buffer Stock** | Distribusi cadangan EDC ≥10% per RO + mutasi/pooling |
 | **Evaluasi Vendor** | Vendor 1 vs Vendor 2: SLA compliance, resolusi, kendala operasional |

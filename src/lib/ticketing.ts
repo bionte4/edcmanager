@@ -2,6 +2,12 @@ import {
   TICKET_STATUS_TRANSITIONS,
   type WorkflowTicketStatus,
 } from "@/config/noc.config";
+import {
+  DEFAULT_PROCESS_BY_TYPE,
+  ITSM_TYPE_PREFIX,
+  type ItsmType,
+  type OperationalProcess,
+} from "@/config/itsm.config";
 import { computeSlaDeadline, evaluateSlaStatus } from "@/sla";
 import type { TicketCategory, TicketLocation } from "@/config/sla.config";
 
@@ -52,6 +58,8 @@ export interface TicketActivityRow {
 export interface OpsTicket {
   id: string;
   ticketNumber: string;
+  itsmType: ItsmType;
+  process: OperationalProcess;
   merchantId: string;
   location: TicketLocation;
   category: TicketCategory;
@@ -63,6 +71,8 @@ export interface OpsTicket {
   nocOwnerName?: string;
   createdById?: string;
   createdByName?: string;
+  problemId?: string | null;
+  relatedChangeId?: string | null;
   openedAt: string;
   closedAt?: string | null;
   acknowledgedAt?: string | null;
@@ -88,19 +98,27 @@ export function createTicket(input: {
   description: string;
   vendorName: string;
   actor: NocUser;
+  itsmType?: ItsmType;
+  process?: OperationalProcess;
+  problemId?: string;
+  relatedChangeId?: string;
   openedAt?: Date;
 }): OpsTicket {
   const merchantId = input.merchantId.trim().toUpperCase();
   if (!merchantId) throw new Error("Merchant ID wajib diisi.");
   if (!input.description.trim()) throw new Error("Deskripsi wajib diisi.");
 
+  const itsmType = input.itsmType ?? "INCIDENT";
+  const process = input.process ?? DEFAULT_PROCESS_BY_TYPE[itsmType];
   const openedAt = input.openedAt ?? new Date();
   const id = `t-${Date.now()}`;
-  const ticketNumber = `CM-${openedAt.getFullYear()}-${String(Date.now()).slice(-4)}`;
+  const ticketNumber = `${ITSM_TYPE_PREFIX[itsmType]}-${openedAt.getFullYear()}-${String(Date.now()).slice(-4)}`;
 
   return {
     id,
     ticketNumber,
+    itsmType,
+    process,
     merchantId,
     location: input.location,
     category: input.category,
@@ -111,12 +129,14 @@ export function createTicket(input: {
     createdByName: input.actor.name,
     nocOwnerId: input.actor.role === "NOC" ? input.actor.id : undefined,
     nocOwnerName: input.actor.role === "NOC" ? input.actor.name : undefined,
+    problemId: input.problemId,
+    relatedChangeId: input.relatedChangeId,
     openedAt: openedAt.toISOString(),
     activities: [
       {
         id: `a-${Date.now()}`,
         type: "CREATED",
-        note: `Tiket dibuat oleh ${input.actor.name}`,
+        note: `${itsmType} dibuat oleh ${input.actor.name} (${process})`,
         actorName: input.actor.name,
         at: openedAt.toISOString(),
         toStatus: "OPEN",
@@ -200,11 +220,36 @@ export function transitionTicket(
   return next;
 }
 
+export function linkIncidentToProblem(
+  incident: OpsTicket,
+  problemId: string,
+  actor: NocUser
+): OpsTicket {
+  if (incident.itsmType !== "INCIDENT") {
+    throw new Error("Hanya Incident yang bisa di-link ke Problem.");
+  }
+  return {
+    ...incident,
+    problemId,
+    activities: [
+      {
+        id: `a-${Date.now()}`,
+        type: "NOTE",
+        note: `Linked ke Problem ${problemId} oleh ${actor.name}`,
+        actorName: actor.name,
+        at: new Date().toISOString(),
+      },
+      ...incident.activities,
+    ],
+  };
+}
+
 export function enrichOpsTicket(ticket: OpsTicket, asOf: Date = new Date()) {
   const evaluation = evaluateSlaStatus(
     {
       location: ticket.location,
       category: ticket.category,
+      itsmType: ticket.itsmType,
       openedAt: new Date(ticket.openedAt),
       closedAt: ticket.closedAt ? new Date(ticket.closedAt) : null,
     },
@@ -213,7 +258,8 @@ export function enrichOpsTicket(ticket: OpsTicket, asOf: Date = new Date()) {
   const deadline = computeSlaDeadline(
     ticket.location,
     ticket.category,
-    new Date(ticket.openedAt)
+    new Date(ticket.openedAt),
+    ticket.itsmType
   );
 
   return {

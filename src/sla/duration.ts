@@ -5,6 +5,7 @@ import {
   type TicketCategory,
   type TicketLocation,
 } from "../config/sla.config";
+import { ITSM_SLA_MINUTES, type ItsmType } from "../config/itsm.config";
 import type { ResolutionDuration, SlaLimitResult } from "./types";
 
 /**
@@ -30,7 +31,7 @@ export function formatDuration(ms: number): string {
 }
 
 /**
- * 1. Hitungan durasi penyelesaian: Tiket Masuk → Tiket Selesai (atau asOf jika masih open).
+ * Hitungan durasi penyelesaian: Tiket Masuk → Tiket Selesai (atau asOf jika masih open).
  */
 export function calculateResolutionDuration(
   openedAt: Date,
@@ -51,9 +52,6 @@ export function calculateResolutionDuration(
   };
 }
 
-/**
- * Local minutes-of-day in the configured SLA timezone (Asia/Jakarta).
- */
 export function getLocalMinutesOfDay(date: Date): number {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: PEAK_HOURS.timeZone,
@@ -67,24 +65,40 @@ export function getLocalMinutesOfDay(date: Date): number {
   return hour * 60 + minute;
 }
 
-/**
- * Peak window: 06.01 inclusive … 21.00 exclusive (ticket at exactly 21:00 is off-peak).
- */
 export function isPeakHours(date: Date): boolean {
   const minutes = getLocalMinutesOfDay(date);
   return minutes >= PEAK_HOURS.startMinutes && minutes < PEAK_HOURS.endMinutes;
 }
 
 /**
- * Resolve SLA resolution limit (minutes) for location + category + open time.
- * Dalam Kota VIP during peak hours → exactly 2 hours.
+ * Resolve SLA resolution limit for ITSM type + location/category.
+ * INCIDENT → location + VIP peak rules (2h Dalam Kota VIP peak).
+ * REQUEST / PROBLEM / CHANGE → ITSM_SLA_MINUTES policy.
  */
 export function getResolutionLimitMinutes(
   location: TicketLocation,
   category: TicketCategory,
-  openedAt: Date
+  openedAt: Date,
+  itsmType: ItsmType = "INCIDENT"
 ): SlaLimitResult {
   assertValidDate(openedAt, "openedAt");
+
+  if (itsmType !== "INCIDENT") {
+    const policy = ITSM_SLA_MINUTES[itsmType];
+    const limitMinutes =
+      category === "VIP" && policy.vipMinutes != null
+        ? policy.vipMinutes
+        : policy.defaultMinutes;
+    const warningAtMinutes = limitMinutes * SLA_WARNING_THRESHOLD;
+    return {
+      limitMinutes,
+      limitMs: limitMinutes * 60 * 1000,
+      isPeakHours: false,
+      warningAtMinutes,
+      warningAtMs: warningAtMinutes * 60 * 1000,
+      itsmType,
+    };
+  }
 
   const rules = RESOLUTION_SLA_MINUTES[location]?.[category];
   if (!rules) {
@@ -101,18 +115,22 @@ export function getResolutionLimitMinutes(
     isPeakHours: peak,
     warningAtMinutes,
     warningAtMs: warningAtMinutes * 60 * 1000,
+    itsmType: "INCIDENT",
   };
 }
 
-/**
- * Absolute SLA deadline timestamp from Tiket Masuk.
- */
 export function computeSlaDeadline(
   location: TicketLocation,
   category: TicketCategory,
-  openedAt: Date
+  openedAt: Date,
+  itsmType: ItsmType = "INCIDENT"
 ): Date {
-  const { limitMs } = getResolutionLimitMinutes(location, category, openedAt);
+  const { limitMs } = getResolutionLimitMinutes(
+    location,
+    category,
+    openedAt,
+    itsmType
+  );
   return new Date(openedAt.getTime() + limitMs);
 }
 

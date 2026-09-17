@@ -17,12 +17,20 @@ import {
   TICKET_STATUS_LABELS,
   type WorkflowTicketStatus,
 } from "@/config/noc.config";
+import {
+  DEFAULT_PROCESS_BY_TYPE,
+  ITSM_TYPE_LABELS,
+  PROCESS_LABELS,
+  type ItsmType,
+  type OperationalProcess,
+} from "@/config/itsm.config";
 import { DEMO_AS_OF, LOCATION_LABELS, CATEGORY_LABELS, SLA_LABELS } from "@/data/dashboard";
 import { MOCK_OPS_TICKETS, MOCK_USERS, ROLE_LABELS } from "@/data/noc";
 import {
   assignTicket,
   createTicket,
   enrichOpsTicket,
+  linkIncidentToProblem,
   nextStatuses,
   transitionTicket,
   type NocUser,
@@ -39,14 +47,24 @@ function slaVariant(status: string): "safe" | "warning" | "breached" | "secondar
 }
 
 const ACTOR = MOCK_USERS.find((u) => u.id === "u-noc-1")!;
+const ITSM_FILTERS: Array<ItsmType | "ALL"> = [
+  "ALL",
+  "INCIDENT",
+  "REQUEST",
+  "PROBLEM",
+  "CHANGE",
+];
 
 export function TicketingModule() {
   const [tickets, setTickets] = useState<OpsTicket[]>(MOCK_OPS_TICKETS);
   const [actorId, setActorId] = useState(ACTOR.id);
   const [selectedId, setSelectedId] = useState<string | null>(MOCK_OPS_TICKETS[0]?.id ?? null);
+  const [typeFilter, setTypeFilter] = useState<ItsmType | "ALL">("ALL");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  const [itsmType, setItsmType] = useState<ItsmType>("INCIDENT");
+  const [process, setProcess] = useState<OperationalProcess>("CM");
   const [merchantId, setMerchantId] = useState("");
   const [location, setLocation] = useState<TicketLocation>("DALAM_KOTA");
   const [category, setCategory] = useState<TicketCategory>("VIP");
@@ -54,10 +72,16 @@ export function TicketingModule() {
   const [description, setDescription] = useState("");
   const [technicianName, setTechnicianName] = useState("");
   const [assignToId, setAssignToId] = useState("u-noc-1");
+  const [linkProblemId, setLinkProblemId] = useState("t-prb-1");
 
   const actor = MOCK_USERS.find((u) => u.id === actorId) ?? ACTOR;
   const nocCandidates = MOCK_USERS.filter(
     (u) => u.role === "NOC" || u.role === "SUPERVISOR"
+  );
+
+  const problems = useMemo(
+    () => tickets.filter((t) => t.itsmType === "PROBLEM"),
+    [tickets]
   );
 
   const enriched = useMemo(
@@ -65,9 +89,22 @@ export function TicketingModule() {
     [tickets]
   );
 
+  const visible = useMemo(
+    () =>
+      typeFilter === "ALL"
+        ? enriched
+        : enriched.filter((t) => t.itsmType === typeFilter),
+    [enriched, typeFilter]
+  );
+
   const selected = enriched.find((t) => t.id === selectedId) ?? null;
   const openCount = enriched.filter((t) => t.status !== "CLOSED" && t.status !== "RESOLVED").length;
   const escalateCount = enriched.filter((t) => t.needsEscalation && t.status !== "CLOSED").length;
+  const counts = useMemo(() => {
+    const base = { INCIDENT: 0, REQUEST: 0, PROBLEM: 0, CHANGE: 0 };
+    for (const t of enriched) base[t.itsmType] += 1;
+    return base;
+  }, [enriched]);
 
   function withFeedback(fn: () => void) {
     try {
@@ -88,13 +125,15 @@ export function TicketingModule() {
         description,
         vendorName,
         actor,
+        itsmType,
+        process,
         openedAt: DEMO_AS_OF,
       });
       setTickets((prev) => [ticket, ...prev]);
       setSelectedId(ticket.id);
       setMerchantId("");
       setDescription("");
-      setMessage(`Tiket ${ticket.ticketNumber} berhasil dibuat.`);
+      setMessage(`${ITSM_TYPE_LABELS[ticket.itsmType]} ${ticket.ticketNumber} dibuat.`);
     });
   }
 
@@ -114,17 +153,25 @@ export function TicketingModule() {
     withFeedback(() => {
       const updated = transitionTicket(selected, toStatus, actor, {
         technicianName,
-        note: undefined,
       });
       setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
       setMessage(`Status → ${TICKET_STATUS_LABELS[toStatus]}`);
     });
   }
 
+  function handleLinkProblem() {
+    if (!selected) return;
+    withFeedback(() => {
+      const updated = linkIncidentToProblem(selected, linkProblemId, actor);
+      setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      setMessage(`Incident di-link ke ${linkProblemId}.`);
+    });
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3">
-        <span className="text-xs text-muted-foreground">Aktor aktif (simulasi login):</span>
+        <span className="text-xs text-muted-foreground">Aktor aktif (simulasi):</span>
         <select
           className="h-8 rounded-md border border-input bg-background px-2 text-sm"
           value={actorId}
@@ -138,33 +185,26 @@ export function TicketingModule() {
         </select>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle>Tiket Aktif</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="font-mono text-2xl font-semibold tabular-nums">{openCount}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle>Perlu Eskalasi SLA</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="font-mono text-2xl font-semibold tabular-nums text-sla-warning">
-              {escalateCount}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle>Total Queue</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="font-mono text-2xl font-semibold tabular-nums">{tickets.length}</p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <Kpi title="Aktif" value={String(openCount)} />
+        <Kpi title="Eskalasi SLA" value={String(escalateCount)} tone="warn" />
+        <Kpi title="Incident" value={String(counts.INCIDENT)} />
+        <Kpi title="Request / Problem / Change" value={`${counts.REQUEST}/${counts.PROBLEM}/${counts.CHANGE}`} />
+        <Kpi title="Total" value={String(tickets.length)} />
+      </div>
+
+      <div className="flex flex-wrap gap-1">
+        {ITSM_FILTERS.map((value) => (
+          <Button
+            key={value}
+            type="button"
+            size="sm"
+            variant={typeFilter === value ? "default" : "outline"}
+            onClick={() => setTypeFilter(value)}
+          >
+            {value === "ALL" ? "Semua ITSM" : ITSM_TYPE_LABELS[value]}
+          </Button>
+        ))}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -172,10 +212,40 @@ export function TicketingModule() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
               <Plus className="h-4 w-4" />
-              Buat Tiket Baru
+              Buat Tiket ITSM
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
+            <Field label="ITSM Type">
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                value={itsmType}
+                onChange={(e) => {
+                  const next = e.target.value as ItsmType;
+                  setItsmType(next);
+                  setProcess(DEFAULT_PROCESS_BY_TYPE[next]);
+                }}
+              >
+                {(Object.keys(ITSM_TYPE_LABELS) as ItsmType[]).map((t) => (
+                  <option key={t} value={t}>
+                    {ITSM_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Process">
+              <select
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                value={process}
+                onChange={(e) => setProcess(e.target.value as OperationalProcess)}
+              >
+                {(Object.keys(PROCESS_LABELS) as OperationalProcess[]).map((p) => (
+                  <option key={p} value={p}>
+                    {PROCESS_LABELS[p]}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="Merchant ID">
               <input
                 className="h-9 w-full rounded-md border border-input bg-background px-2 font-mono text-sm"
@@ -205,7 +275,7 @@ export function TicketingModule() {
                 <option value="LUAR_PULAU">Luar Pulau</option>
               </select>
             </Field>
-            <Field label="Kategori">
+            <Field label="Prioritas">
               <select
                 className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                 value={category}
@@ -221,13 +291,13 @@ export function TicketingModule() {
                   className="min-h-[72px] w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Gejala / keluhan merchant"
+                  placeholder="Detail incident / request / problem / change"
                 />
               </Field>
             </div>
             <div className="sm:col-span-2">
               <Button type="button" onClick={handleCreate}>
-                Create Ticket
+                Create
               </Button>
             </div>
           </CardContent>
@@ -241,7 +311,7 @@ export function TicketingModule() {
             </CardTitle>
             <p className="text-xs text-muted-foreground">
               {selected
-                ? `${selected.ticketNumber} · ${TICKET_STATUS_LABELS[selected.status]}`
+                ? `${selected.ticketNumber} · ${ITSM_TYPE_LABELS[selected.itsmType]} · ${TICKET_STATUS_LABELS[selected.status]}`
                 : "Pilih tiket di tabel"}
             </p>
           </CardHeader>
@@ -276,6 +346,32 @@ export function TicketingModule() {
               />
             </Field>
 
+            {selected?.itsmType === "INCIDENT" && (
+              <Field label="Link ke Problem">
+                <div className="flex gap-2">
+                  <select
+                    className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm"
+                    value={linkProblemId}
+                    onChange={(e) => setLinkProblemId(e.target.value)}
+                  >
+                    {problems.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.ticketNumber}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!selected || problems.length === 0}
+                    onClick={handleLinkProblem}
+                  >
+                    Link
+                  </Button>
+                </div>
+              </Field>
+            )}
+
             <div className="flex flex-wrap gap-1">
               {(selected ? nextStatuses(selected.status) : []).map((status) => (
                 <Button
@@ -288,9 +384,6 @@ export function TicketingModule() {
                   → {TICKET_STATUS_LABELS[status]}
                 </Button>
               ))}
-              {selected && nextStatuses(selected.status).length === 0 && (
-                <p className="text-xs text-muted-foreground">Tidak ada transisi lanjutan.</p>
-              )}
             </div>
 
             {selected?.needsEscalation && (
@@ -308,23 +401,26 @@ export function TicketingModule() {
 
       <section className="rounded-lg border border-border bg-card">
         <div className="border-b border-border p-4">
-          <h2 className="text-sm font-semibold tracking-wide">Antrian Ticketing NOC</h2>
+          <h2 className="text-sm font-semibold tracking-wide">Antrian ITSM</h2>
+          <p className="text-xs text-muted-foreground">
+            Incident (CM), Request, Problem, Change — SLA per tipe dari config
+          </p>
         </div>
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Tiket</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Process</TableHead>
               <TableHead>Merchant</TableHead>
-              <TableHead>Lokasi</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>SLA</TableHead>
-              <TableHead>NOC Owner</TableHead>
-              <TableHead>Teknisi</TableHead>
-              <TableHead>Masuk</TableHead>
+              <TableHead>Links</TableHead>
+              <TableHead>NOC</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {enriched.map((ticket) => (
+            {visible.map((ticket) => (
               <TableRow
                 key={ticket.id}
                 className={selectedId === ticket.id ? "bg-muted/50" : "cursor-pointer"}
@@ -333,26 +429,25 @@ export function TicketingModule() {
                 <TableCell className="font-mono text-xs font-medium">
                   {ticket.ticketNumber}
                 </TableCell>
+                <TableCell>
+                  <Badge variant="secondary">{ITSM_TYPE_LABELS[ticket.itsmType]}</Badge>
+                </TableCell>
+                <TableCell className="text-xs">{PROCESS_LABELS[ticket.process]}</TableCell>
                 <TableCell className="font-mono text-xs">{ticket.merchantId}</TableCell>
                 <TableCell>
-                  {LOCATION_LABELS[ticket.location]}
-                  <span className="ml-1 text-xs text-muted-foreground">
-                    · {CATEGORY_LABELS[ticket.category]}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{TICKET_STATUS_LABELS[ticket.status]}</Badge>
+                  <Badge variant="outline">{TICKET_STATUS_LABELS[ticket.status]}</Badge>
                 </TableCell>
                 <TableCell>
                   <Badge variant={slaVariant(ticket.slaStatus)}>
                     {SLA_LABELS[ticket.slaStatus]}
                   </Badge>
                 </TableCell>
-                <TableCell>{ticket.nocOwnerName || "—"}</TableCell>
-                <TableCell>{ticket.technicianName || "—"}</TableCell>
-                <TableCell className="whitespace-nowrap font-mono text-xs">
-                  {formatDateTime(ticket.openedAt)}
+                <TableCell className="font-mono text-[10px] text-muted-foreground">
+                  {ticket.problemId ? `PRB:${ticket.problemId}` : ""}
+                  {ticket.relatedChangeId ? ` CHG:${ticket.relatedChangeId}` : ""}
+                  {!ticket.problemId && !ticket.relatedChangeId ? "—" : ""}
                 </TableCell>
+                <TableCell>{ticket.nocOwnerName || "—"}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -365,7 +460,14 @@ export function TicketingModule() {
             <h2 className="text-sm font-semibold tracking-wide">
               Activity Log · {selected.ticketNumber}
             </h2>
-            <p className="text-xs text-muted-foreground">{selected.description}</p>
+            <p className="text-xs text-muted-foreground">
+              {ITSM_TYPE_LABELS[selected.itsmType]} · {PROCESS_LABELS[selected.process]} ·{" "}
+              {LOCATION_LABELS[selected.location]} · {CATEGORY_LABELS[selected.category]}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{selected.description}</p>
+            <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+              Masuk {formatDateTime(selected.openedAt)} · elapsed {selected.elapsedLabel}
+            </p>
           </div>
           <ul className="divide-y divide-border">
             {selected.activities.map((activity) => (
@@ -387,13 +489,34 @@ export function TicketingModule() {
   );
 }
 
-function Field({
-  label,
-  children,
+function Kpi({
+  title,
+  value,
+  tone,
 }: {
-  label: string;
-  children: React.ReactNode;
+  title: string;
+  value: string;
+  tone?: "warn";
 }) {
+  return (
+    <Card>
+      <CardHeader className="pb-1">
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p
+          className={`font-mono text-2xl font-semibold tabular-nums ${
+            tone === "warn" ? "text-sla-warning" : ""
+          }`}
+        >
+          {value}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1 text-xs">
       <span className="text-muted-foreground">{label}</span>
