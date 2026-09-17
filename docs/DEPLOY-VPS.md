@@ -142,20 +142,23 @@ services:
       AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
 ```
 
-> Compose v2.24+: file `docker-compose.prod.yml` memakai `ports: !reset` agar DB tidak dipublish.  
-> Jika perintah gagal (Compose lama), edit `docker-compose.yml` manual: hapus `ports` pada `db`, dan set app ke `"127.0.0.1:3000:3000"`.
+> **Port app:** `docker-compose.yml` mem-bind `127.0.0.1:3000` (aman di belakang Nginx).  
+> **Port DB di VPS:** `docker-compose.prod.yml` memakai `ports: !reset []` agar Postgres tidak punya mapping host.  
+> Jika Compose lama gagal dengan `!reset`, hapus saja blok `ports` pada service `db` di `docker-compose.yml`.
 
 ### Build & jalankan
+
+Port app sudah di-bind ke `127.0.0.1:3000` di `docker-compose.yml`. Pastikan setelah `up`, kolom PORTS menampilkan `127.0.0.1:3000->3000/tcp` (bukan hanya `3000/tcp`).
 
 ```bash
 cd /opt/edcmanager
 
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 
-# Cek
-docker compose ps
-docker compose logs -f app
+# Cek — PORTS app harus: 127.0.0.1:3000->3000/tcp
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 curl -I http://127.0.0.1:3000
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f --tail=80 app
 ```
 
 Login demo: `admin@edc.local` / `edc123` — **ganti password user via Admin Users** setelah go-live.

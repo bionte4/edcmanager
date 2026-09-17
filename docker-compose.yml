@@ -5,10 +5,11 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: edcmanager
+    # Localhost only — not exposed to the public internet
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - edcmanager_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,14 +24,15 @@ services:
       dockerfile: Dockerfile
     container_name: edcmanager-app
     restart: unless-stopped
+    # Localhost only — put Nginx/Caddy in front on VPS
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       NODE_ENV: production
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
       AUTH_SECRET: ${AUTH_SECRET:-edc-docker-secret-change-me}
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/edcmanager?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/edcmanager?schema=public
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
