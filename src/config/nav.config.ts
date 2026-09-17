@@ -105,7 +105,7 @@ export const NAV_ITEMS: readonly NavItemDef[] = [
   },
   {
     id: "vendor",
-    href: "/evaluasi-vendor",
+    href: "/vendors",
     label: "Vendor",
     shortLabel: "Vendor",
     icon: "vendor",
@@ -119,7 +119,7 @@ export const NAV_ITEMS: readonly NavItemDef[] = [
     label: "Konfigurasi",
     shortLabel: "Config",
     icon: "config",
-    anyOf: ["ola:read", "category:read"],
+    anyOf: ["ola:read", "category:read", "location:read"],
     placement: "secondary",
     group: "sistem",
   },
@@ -171,7 +171,7 @@ export const ROLE_PRIMARY_HREFS: Record<AppRole, readonly string[]> = {
   SUPERVISOR: ["/", "/ticketing", "/workforce", "/inventory"],
   OPS_MANAGER: ["/", "/ticketing", "/inventory", "/reporting"],
   VENDOR_TECH: ["/", "/ticketing", "/inventory"],
-  GM: ["/", "/executive", "/reporting", "/evaluasi-vendor"],
+  GM: ["/", "/executive", "/reporting", "/vendors"],
   ADMIN: ["/", "/ticketing", "/workforce", "/inventory"],
 };
 

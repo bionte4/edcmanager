@@ -90,6 +90,13 @@ export function TicketingModule() {
     { code: "VIP", label: "VIP", slaProfile: "VIP" },
     { code: "NON_VIP", label: "Non-VIP", slaProfile: "NON_VIP" },
   ]);
+  const [locations, setLocations] = useState<
+    Array<{ code: string; label: string; slaZone: string }>
+  >([
+    { code: "DALAM_KOTA", label: "Dalam Kota (zona)", slaZone: "DALAM_KOTA" },
+    { code: "LUAR_KOTA", label: "Luar Kota (zona)", slaZone: "LUAR_KOTA" },
+    { code: "LUAR_PULAU", label: "Luar Pulau (zona)", slaZone: "LUAR_PULAU" },
+  ]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<ItsmType | "ALL">("ALL");
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +110,10 @@ export function TicketingModule() {
   const [location, setLocation] = useState<TicketLocation>("DALAM_KOTA");
   const [category, setCategory] = useState<TicketCategory>("VIP");
   const [vendorName, setVendorName] = useState("Vendor 1");
+  const [vendorOptions, setVendorOptions] = useState<string[]>([
+    "Vendor 1",
+    "Vendor 2",
+  ]);
   const [description, setDescription] = useState("");
   const [technicianName, setTechnicianName] = useState("");
   const [assignToId, setAssignToId] = useState("u-noc-1");
@@ -152,11 +163,48 @@ export function TicketingModule() {
     }
   }, []);
 
+  const loadVendors = useCallback(async () => {
+    try {
+      const res = await fetch("/api/vendors?activeOnly=1", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { vendors?: Array<{ name: string }> };
+      const names = (data.vendors ?? []).map((v) => v.name);
+      if (names.length > 0) {
+        setVendorOptions(names);
+        setVendorName((prev) => (names.includes(prev) ? prev : names[0]));
+      }
+    } catch {
+      /* keep Vendor 1/2 fallback */
+    }
+  }, []);
+
+  const loadLocations = useCallback(async () => {
+    try {
+      const res = await fetch("/api/locations?activeOnly=1", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        locations?: Array<{ code: string; label: string; slaZone: string }>;
+      };
+      if (data.locations?.length) {
+        setLocations(data.locations);
+        setLocation((prev) =>
+          data.locations!.some((l) => l.code === prev)
+            ? prev
+            : data.locations![0]!.code
+        );
+      }
+    } catch {
+      /* keep zone aliases */
+    }
+  }, []);
+
   useEffect(() => {
     void loadTickets();
     void loadOla();
     void loadCategories();
-  }, [loadTickets, loadOla, loadCategories]);
+    void loadVendors();
+    void loadLocations();
+  }, [loadTickets, loadOla, loadCategories, loadVendors, loadLocations]);
 
   const actor: NocUser | null = user
     ? {
@@ -396,8 +444,11 @@ export function TicketingModule() {
                 value={vendorName}
                 onChange={(e) => setVendorName(e.target.value)}
               >
-                <option>Vendor 1</option>
-                <option>Vendor 2</option>
+                {vendorOptions.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Lokasi">
@@ -406,9 +457,11 @@ export function TicketingModule() {
                 value={location}
                 onChange={(e) => setLocation(e.target.value as TicketLocation)}
               >
-                <option value="DALAM_KOTA">Dalam Kota</option>
-                <option value="LUAR_KOTA">Luar Kota</option>
-                <option value="LUAR_PULAU">Luar Pulau</option>
+                {locations.map((loc) => (
+                  <option key={loc.code} value={loc.code}>
+                    {loc.label} ({loc.slaZone.replace(/_/g, " ")})
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Prioritas">
@@ -655,7 +708,10 @@ export function TicketingModule() {
             </h2>
             <p className="text-xs text-muted-foreground">
               {ITSM_TYPE_LABELS[selected.itsmType]} · {PROCESS_LABELS[selected.process]} ·{" "}
-              {LOCATION_LABELS[selected.location]} ·{" "}
+              {LOCATION_LABELS[selected.location] ??
+                locations.find((l) => l.code === selected.location)?.label ??
+                selected.location}{" "}
+              ·{" "}
               {categories.find((c) => c.code === selected.category)?.label ??
                 CATEGORY_LABELS[selected.category] ??
                 selected.category}

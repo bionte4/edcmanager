@@ -6,12 +6,14 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { HubTabs } from "@/components/layout/hub-tabs";
 import { OlaPoliciesModule } from "@/components/ola/ola-policies-module";
 import { TicketCategoriesModule } from "@/components/categories/ticket-categories-module";
+import { LocationsModule } from "@/components/locations/locations-module";
 
 function ConfigHubInner() {
   const { can } = useAuth();
   const search = useSearchParams();
   const canOla = can("ola:read");
   const canCat = can("category:read");
+  const canLoc = can("location:read");
 
   const tabs = useMemo(
     () =>
@@ -28,8 +30,14 @@ function ConfigHubInner() {
           href: "/config?tab=categories",
           visible: canCat,
         },
+        {
+          id: "locations",
+          label: "Lokasi & SLA",
+          href: "/config?tab=locations",
+          visible: canLoc,
+        },
       ] as const,
-    [canOla, canCat]
+    [canOla, canCat, canLoc]
   );
 
   const visible = tabs.filter((t) => t.visible);
@@ -39,10 +47,11 @@ function ConfigHubInner() {
     return visible[0]?.id ?? "ola";
   }, [search, visible]);
 
-  if (!canOla && !canCat) {
+  if (!canOla && !canCat && !canLoc) {
     return (
       <p className="text-sm text-muted-foreground">
-        Anda tidak punya akses konfigurasi (`ola:read` / `category:read`).
+        Anda tidak punya akses konfigurasi (`ola:read` / `category:read` /
+        `location:read`).
       </p>
     );
   }
@@ -51,10 +60,12 @@ function ConfigHubInner() {
     <div className="flex flex-col gap-3">
       <HubTabs tabs={[...tabs]} activeId={activeId} />
       <p className="text-[11px] text-muted-foreground">
-        CRUD mengikuti RBAC: OLA (`ola:manage`) · Kategori (`category:manage`).
+        CRUD mengikuti RBAC: OLA (`ola:manage`) · Kategori (`category:manage`) ·
+        Lokasi (`location:manage`).
       </p>
       {activeId === "ola" && canOla && <OlaPoliciesModule />}
       {activeId === "categories" && canCat && <TicketCategoriesModule />}
+      {activeId === "locations" && canLoc && <LocationsModule />}
     </div>
   );
 }

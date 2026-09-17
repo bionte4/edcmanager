@@ -1,15 +1,14 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import type { OlaStage } from "@/config/ola.config";
 import {
-  createOlaPolicy,
-  deleteOlaPolicy,
-  listOlaPolicies,
-  refreshOlaCache,
-  resetOlaPolicies,
-  updateOlaPolicy,
-  type OlaPolicyInput,
-} from "@/data/ola-store";
+  createVendor,
+  deleteVendor,
+  listVendors,
+  resetVendors,
+  updateVendor,
+  type VendorInput,
+} from "@/data/vendors-store";
+import { loadVendorMetrics } from "@/data/vendors";
 import { findUserById } from "@/data/users-store";
 import {
   SESSION_COOKIE,
@@ -39,13 +38,14 @@ function statusFor(e: unknown): number {
 export async function GET(request: Request) {
   try {
     const user = await requireUser();
-    assertCan(user, "ola:read");
+    assertCan(user, "vendor:read");
     const { searchParams } = new URL(request.url);
-    const stage = (searchParams.get("stage") as OlaStage | null) ?? undefined;
+    if (searchParams.get("view") === "metrics") {
+      return NextResponse.json({ metrics: await loadVendorMetrics() });
+    }
     const activeOnly = searchParams.get("activeOnly") === "1";
-    await refreshOlaCache();
     return NextResponse.json({
-      policies: listOlaPolicies({ stage, activeOnly }),
+      vendors: await listVendors({ activeOnly }),
     });
   } catch (e) {
     return NextResponse.json(
@@ -58,17 +58,17 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
-    assertCan(user, "ola:manage");
-    const body = (await request.json()) as OlaPolicyInput & {
+    assertCan(user, "vendor:manage");
+    const body = (await request.json()) as VendorInput & {
       action?: "create" | "reset";
     };
 
     if (body.action === "reset") {
-      return NextResponse.json({ policies: await resetOlaPolicies() });
+      return NextResponse.json({ vendors: await resetVendors() });
     }
 
-    const policy = await createOlaPolicy(body);
-    return NextResponse.json({ policy }, { status: 201 });
+    const vendor = await createVendor(body);
+    return NextResponse.json({ vendor }, { status: 201 });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Error" },
@@ -80,12 +80,14 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const user = await requireUser();
-    assertCan(user, "ola:manage");
-    const body = (await request.json()) as Partial<OlaPolicyInput> & { id?: string };
+    assertCan(user, "vendor:manage");
+    const body = (await request.json()) as Partial<VendorInput> & {
+      id?: string;
+    };
     if (!body.id) throw new Error("id wajib diisi.");
     const { id, ...rest } = body;
-    const policy = await updateOlaPolicy(id, rest);
-    return NextResponse.json({ policy });
+    const vendor = await updateVendor(id, rest);
+    return NextResponse.json({ vendor });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Error" },
@@ -97,12 +99,18 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const user = await requireUser();
-    assertCan(user, "ola:manage");
+    assertCan(user, "vendor:manage");
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (!id) throw new Error("id wajib diisi.");
-    await deleteOlaPolicy(id);
-    return NextResponse.json({ ok: true });
+    const result = await deleteVendor(id);
+    return NextResponse.json({
+      ok: true,
+      soft: result.soft,
+      message: result.soft
+        ? "Vendor punya data terkait — dinonaktifkan."
+        : "Vendor dihapus.",
+    });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Error" },

@@ -41,11 +41,16 @@ export async function refreshTicketCategoryCache(): Promise<void> {
   }
 }
 
-void refreshTicketCategoryCache();
+// Do not refresh on module import — breaks `next build` when DB is unreachable.
+let categoryCacheWarmed = false;
 
 export async function listTicketCategories(opts?: {
   activeOnly?: boolean;
 }): Promise<TicketCategoryDef[]> {
+  if (!categoryCacheWarmed) {
+    await refreshTicketCategoryCache();
+    categoryCacheWarmed = true;
+  }
   return categories
     .filter((c) => (opts?.activeOnly ? c.isActive : true))
     .map(clone)

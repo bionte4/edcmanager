@@ -284,7 +284,8 @@ model Ticket {
   itsmType       ItsmType            @default(INCIDENT)
   process        OperationalProcess  @default(CM)
   merchantId     String
-  location       TicketLocation
+  /// Location code from LocationDef (maps to SLA zone Dalam/Luar kota/pulau)
+  location       String
   /// Category code from TicketCategoryDef (VIP, NON_VIP, custom)
   category       String
   status         TicketStatus        @default(OPEN)
@@ -464,6 +465,26 @@ model TicketCategoryDef {
 
   @@index([isActive, sortOrder])
   @@map("ticket_categories")
+}
+
+/// Master lokasi operasional — kode di tiket memetakan ke zona SLA (TicketLocation).
+model LocationDef {
+  id               String         @id @default(cuid())
+  code             String         @unique
+  label            String
+  /// Zona matrix RESOLUTION_SLA_MINUTES
+  slaZone          TicketLocation
+  /// Opsional tautan ke RO inventori
+  regionalOffice   String?
+  description      String?
+  sortOrder        Int            @default(100)
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([slaZone])
+  @@index([isActive, sortOrder])
+  @@map("locations")
 }
 
 // ─── OLA policies ────────────────────────────────────────────────────────────

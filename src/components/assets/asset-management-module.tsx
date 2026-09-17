@@ -59,6 +59,7 @@ export function AssetManagementModule() {
 
   const [assets, setAssets] = useState<EdcAsset[]>([]);
   const [kpis, setKpis] = useState<Kpis>({ total: 0, buffer: 0, deployed: 0, idle: 0 });
+  const [vendorOptions, setVendorOptions] = useState<string[]>([...ASSET_VENDORS]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +88,25 @@ export function AssetManagementModule() {
     () => assets.find((a) => a.id === selectedId) ?? null,
     [assets, selectedId]
   );
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/vendors?activeOnly=1", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          vendors?: Array<{ name: string }>;
+        };
+        const names = (data.vendors ?? []).map((v) => v.name);
+        if (names.length > 0) {
+          setVendorOptions(names);
+          setVendorName((prev) => (names.includes(prev) ? prev : names[0]));
+        }
+      } catch {
+        /* keep ASSET_VENDORS fallback */
+      }
+    })();
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -117,7 +137,7 @@ export function AssetManagementModule() {
     setSerialNumber("");
     setBrand(EDC_BRANDS[0]);
     setRegionalOffice(REGIONAL_OFFICES[0]);
-    setVendorName(ASSET_VENDORS[0]);
+    setVendorName(vendorOptions[0] ?? ASSET_VENDORS[0]);
     setStatus("BUFFER");
     setMerchantId("");
     setNotes("");
@@ -454,7 +474,7 @@ export function AssetManagementModule() {
                     value={vendorName}
                     onChange={(e) => setVendorName(e.target.value)}
                   >
-                    {ASSET_VENDORS.map((v) => (
+                    {vendorOptions.map((v) => (
                       <option key={v} value={v}>
                         {v}
                       </option>

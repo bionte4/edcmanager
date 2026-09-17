@@ -26,6 +26,8 @@ export const PERMISSIONS = [
   "ola:manage",
   "category:read",
   "category:manage",
+  "location:read",
+  "location:manage",
   "report:read",
   "report:export",
   "user:read",
@@ -57,7 +59,7 @@ const ALL: Permission[] = [...PERMISSIONS];
  * | NOC (L1)     | Dasbor, Tiket, Workforce (tab NOC) · notif di header |
  * | VENDOR_TECH  | Dasbor, Tiket, Inventori |
  *
- * Hubs: /inventory · /workforce · /config — tab di dalamnya tetap RBAC per modul CRUD.
+ * Hubs: /inventory · /workforce · /config · /vendors — tab di dalamnya tetap RBAC per modul CRUD.
  * Notifikasi: icon bell di header (bukan strip menu).
  */
 export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
@@ -89,6 +91,8 @@ export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
     "ola:manage",
     "category:read",
     "category:manage",
+    "location:read",
+    "location:manage",
     "report:read",
     "report:export",
     "user:read",
@@ -107,9 +111,11 @@ export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
     "wfm:approve",
     "inventory:read",
     "inventory:mutate",
+    "vendor:read",
     "notification:read",
     "ola:read",
     "category:read",
+    "location:read",
     "report:read",
     "report:export",
     "user:read",
@@ -121,15 +127,19 @@ export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
     "ticket:update",
     "ticket:assign",
     "noc:read",
+    "vendor:read",
     "notification:read",
     "category:read",
+    "location:read",
   ],
   VENDOR_TECH: [
     "dashboard:read",
     "ticket:read",
     "ticket:update",
     "inventory:read",
+    "vendor:read",
     "category:read",
+    "location:read",
   ],
 };
 
@@ -161,15 +171,19 @@ export const ROUTE_PERMISSIONS: Array<{
   { prefix: "/assets", permission: "inventory:read" },
   { prefix: "/api/assets", permission: "inventory:read" },
   { prefix: "/evaluasi-vendor", permission: "vendor:read" },
+  { prefix: "/vendors", permission: "vendor:read" },
+  { prefix: "/api/vendors", permission: "vendor:read" },
   { prefix: "/ticketing", permission: "ticket:read" },
   { prefix: "/reporting", permission: "report:read" },
   { prefix: "/api/reporting", permission: "report:read" },
   { prefix: "/executive", permission: "executive:read" },
-  { prefix: "/config", anyOf: ["ola:read", "category:read"] },
+  { prefix: "/config", anyOf: ["ola:read", "category:read", "location:read"] },
   { prefix: "/ola", permission: "ola:read" },
   { prefix: "/api/ola", permission: "ola:read" },
   { prefix: "/categories", permission: "category:read" },
   { prefix: "/api/categories", permission: "category:read" },
+  { prefix: "/locations", permission: "location:read" },
+  { prefix: "/api/locations", permission: "location:read" },
   { prefix: "/workforce", anyOf: ["noc:read", "wfm:read"] },
   { prefix: "/wfm", permission: "wfm:read" },
   { prefix: "/api/wfm", permission: "wfm:read" },

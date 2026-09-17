@@ -7,6 +7,7 @@ import {
 } from "../config/sla.config";
 import { ITSM_SLA_MINUTES, type ItsmType } from "../config/itsm.config";
 import { getCategorySlaProfile } from "../data/ticket-categories-store";
+import { getLocationSlaZone } from "../data/locations-store";
 import type { ResolutionDuration, SlaLimitResult } from "./types";
 
 /**
@@ -103,9 +104,10 @@ export function getResolutionLimitMinutes(
   }
 
   const profile = getCategorySlaProfile(category);
-  const rules = RESOLUTION_SLA_MINUTES[location]?.[profile];
+  const zone = getLocationSlaZone(location);
+  const rules = RESOLUTION_SLA_MINUTES[zone]?.[profile];
   if (!rules) {
-    throw new Error(`No SLA rule configured for ${location} / profile ${profile}`);
+    throw new Error(`No SLA rule configured for zone ${zone} / profile ${profile}`);
   }
 
   const peak = isPeakHours(openedAt);

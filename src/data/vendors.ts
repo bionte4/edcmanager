@@ -99,7 +99,7 @@ export interface VendorComparisonRow {
   metric: string;
   vendor1: string;
   vendor2: string;
-  winner: "Vendor 1" | "Vendor 2" | "Tie";
+  winner: string;
 }
 
 export function buildVendorComparison(
@@ -116,10 +116,10 @@ export function buildVendorComparison(
     format: (n: number) => string,
     higherIsBetter: boolean
   ): VendorComparisonRow => {
-    let winner: VendorComparisonRow["winner"] = "Tie";
+    let winner = "Tie";
     if (a !== b) {
       const aWins = higherIsBetter ? a > b : a < b;
-      winner = aWins ? "Vendor 1" : "Vendor 2";
+      winner = aWins ? v1.vendorName : v2.vendorName;
     }
     return {
       metric,

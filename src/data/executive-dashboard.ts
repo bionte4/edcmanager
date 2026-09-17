@@ -100,6 +100,40 @@ function buildTrend(vendors: VendorMonthlyMetrics[]): MonthlyTrendPoint[] {
   });
 }
 
+/** Safe placeholder when DB is unreachable (build / cold start). */
+export function emptyExecutiveSummary(asOf: Date = DEMO_AS_OF): ExecutiveSummary {
+  return {
+    asOf: asOf.toISOString(),
+    national: {
+      slaCompliancePercent: 0,
+      slaFloor: EXEC_SLA_COMPLIANCE_FLOOR,
+      uptimePercent: 0,
+      uptimeTarget: UPTIME_TARGET_PERCENT,
+      breachedTickets: 0,
+      openTickets: 0,
+      penaltyRisk: "LOW",
+    },
+    buffer: {
+      minPercent: BUFFER_STOCK_MIN_PERCENT,
+      roTotal: 0,
+      roBelow: 0,
+      belowPercent: 0,
+      rows: [],
+    },
+    deployment: {
+      targetUnits: DEPLOYMENT_TARGET_UNITS,
+      deployedUnits: 0,
+      progressPercent: 0,
+      byVendor: [],
+    },
+    vendors: [],
+    trend: [],
+    narrative: [
+      "Data executive tidak tersedia — database belum terhubung atau belum di-seed.",
+    ],
+  };
+}
+
 export async function buildExecutiveSummary(
   asOf: Date = DEMO_AS_OF
 ): Promise<ExecutiveSummary> {

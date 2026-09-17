@@ -68,7 +68,7 @@ function mapTicket(row: TicketWithRelations): OpsTicket {
     itsmType: row.itsmType as ItsmType,
     process: row.process as OperationalProcess,
     merchantId: row.merchantId,
-    location: row.location as TicketLocation,
+    location: row.location,
     category: row.category as TicketCategory,
     status: row.status as WorkflowTicketStatus,
     description: row.description ?? "",

@@ -16,13 +16,13 @@ import {
   CATEGORY_LABELS,
   LOCATION_LABELS,
   SLA_LABELS,
+  locationLabel,
   type EnrichedTicket,
-  type TicketLocation,
 } from "@/data/dashboard";
 import { formatDateTime } from "@/lib/utils";
 import type { SlaEvaluationStatus } from "@/sla";
 
-type LocationFilter = TicketLocation | "ALL";
+type LocationFilter = string;
 type CategoryFilter = string;
 
 function slaBadgeVariant(
@@ -41,8 +41,6 @@ function slaBadgeVariant(
   }
 }
 
-const LOCATIONS: LocationFilter[] = ["ALL", "DALAM_KOTA", "LUAR_KOTA", "LUAR_PULAU"];
-
 export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
   const [location, setLocation] = useState<LocationFilter>("ALL");
   const [category, setCategory] = useState<CategoryFilter>("ALL");
@@ -52,23 +50,40 @@ export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
     { code: "VIP", label: "VIP", slaProfile: "VIP" },
     { code: "NON_VIP", label: "Non-VIP", slaProfile: "NON_VIP" },
   ]);
+  const [locationOptions, setLocationOptions] = useState<
+    Array<{ code: string; label: string }>
+  >([
+    { code: "DALAM_KOTA", label: "Dalam Kota" },
+    { code: "LUAR_KOTA", label: "Luar Kota" },
+    { code: "LUAR_PULAU", label: "Luar Pulau" },
+  ]);
 
-  const loadCategories = useCallback(async () => {
+  const loadFilters = useCallback(async () => {
     try {
-      const res = await fetch("/api/categories?activeOnly=1", { cache: "no-store" });
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        categories?: Array<{ code: string; label: string; slaProfile: string }>;
-      };
-      if (data.categories?.length) setCategoryOptions(data.categories);
+      const [catRes, locRes] = await Promise.all([
+        fetch("/api/categories?activeOnly=1", { cache: "no-store" }),
+        fetch("/api/locations?activeOnly=1", { cache: "no-store" }),
+      ]);
+      if (catRes.ok) {
+        const data = (await catRes.json()) as {
+          categories?: Array<{ code: string; label: string; slaProfile: string }>;
+        };
+        if (data.categories?.length) setCategoryOptions(data.categories);
+      }
+      if (locRes.ok) {
+        const data = (await locRes.json()) as {
+          locations?: Array<{ code: string; label: string }>;
+        };
+        if (data.locations?.length) setLocationOptions(data.locations);
+      }
     } catch {
       /* keep defaults */
     }
   }, []);
 
   useEffect(() => {
-    void loadCategories();
-  }, [loadCategories]);
+    void loadFilters();
+  }, [loadFilters]);
 
   const filtered = useMemo(() => {
     return tickets.filter((ticket) => {
@@ -83,6 +98,14 @@ export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
       categoryOptions.find((c) => c.code === code)?.label ??
       CATEGORY_LABELS[code] ??
       code
+    );
+  }
+
+  function locLabel(code: string): string {
+    return (
+      locationOptions.find((l) => l.code === code)?.label ??
+      LOCATION_LABELS[code] ??
+      locationLabel(code)
     );
   }
 
@@ -104,15 +127,23 @@ export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
         </div>
         <div className="flex flex-wrap items-center gap-1">
           <Filter className="h-3 w-3 text-muted-foreground" />
-          {LOCATIONS.map((value) => (
+          <Button
+            type="button"
+            size="xs"
+            variant={location === "ALL" ? "default" : "outline"}
+            onClick={() => setLocation("ALL")}
+          >
+            Semua Lokasi
+          </Button>
+          {locationOptions.map((opt) => (
             <Button
-              key={value}
+              key={opt.code}
               type="button"
               size="xs"
-              variant={location === value ? "default" : "outline"}
-              onClick={() => setLocation(value)}
+              variant={location === opt.code ? "default" : "outline"}
+              onClick={() => setLocation(opt.code)}
             >
-              {value === "ALL" ? "Semua Lokasi" : LOCATION_LABELS[value]}
+              {opt.label}
             </Button>
           ))}
           <span className="mx-1 hidden h-4 w-px bg-border sm:inline-block" />
@@ -166,7 +197,7 @@ export function TicketTable({ tickets }: { tickets: EnrichedTicket[] }) {
                   {ticket.ticketNumber}
                 </TableCell>
                 <TableCell className="font-mono text-xs">{ticket.merchantId}</TableCell>
-                <TableCell>{LOCATION_LABELS[ticket.location]}</TableCell>
+                <TableCell>{locLabel(ticket.location)}</TableCell>
                 <TableCell>
                   <Badge variant={isVipProfile(ticket.category) ? "default" : "secondary"}>
                     {labelFor(ticket.category)}

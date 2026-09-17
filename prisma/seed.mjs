@@ -27,6 +27,60 @@ const CATEGORIES = [
   },
 ];
 
+const LOCATIONS = [
+  {
+    id: "loc-dalam-kota",
+    code: "DALAM_KOTA",
+    label: "Dalam Kota (zona)",
+    slaZone: "DALAM_KOTA",
+    description: "Alias zona — SLA peak VIP 2 jam",
+    sortOrder: 10,
+  },
+  {
+    id: "loc-luar-kota",
+    code: "LUAR_KOTA",
+    label: "Luar Kota (zona)",
+    slaZone: "LUAR_KOTA",
+    description: "Alias zona SLA luar kota",
+    sortOrder: 20,
+  },
+  {
+    id: "loc-luar-pulau",
+    code: "LUAR_PULAU",
+    label: "Luar Pulau (zona)",
+    slaZone: "LUAR_PULAU",
+    description: "Alias zona SLA luar pulau",
+    sortOrder: 30,
+  },
+  {
+    id: "loc-jkt-pusat",
+    code: "JKT_PUSAT",
+    label: "Jakarta Pusat",
+    slaZone: "DALAM_KOTA",
+    regionalOffice: "RO Jakarta 1",
+    description: "Contoh lokasi dalam kota",
+    sortOrder: 40,
+  },
+  {
+    id: "loc-bdg",
+    code: "BDG_KOTA",
+    label: "Bandung Kota",
+    slaZone: "LUAR_KOTA",
+    regionalOffice: "RO Bandung",
+    description: "Contoh lokasi luar kota",
+    sortOrder: 50,
+  },
+  {
+    id: "loc-dps",
+    code: "DPS_BALI",
+    label: "Denpasar Bali",
+    slaZone: "LUAR_PULAU",
+    regionalOffice: "RO Denpasar",
+    description: "Contoh lokasi luar pulau",
+    sortOrder: 60,
+  },
+];
+
 const OLA = [
   {
     id: "ola-ack-vip-dk",
@@ -161,6 +215,30 @@ async function main() {
     });
   }
 
+  for (const loc of LOCATIONS) {
+    await prisma.locationDef.upsert({
+      where: { code: loc.code },
+      update: {
+        label: loc.label,
+        slaZone: loc.slaZone,
+        regionalOffice: loc.regionalOffice ?? null,
+        description: loc.description,
+        sortOrder: loc.sortOrder,
+        isActive: true,
+      },
+      create: {
+        id: loc.id,
+        code: loc.code,
+        label: loc.label,
+        slaZone: loc.slaZone,
+        regionalOffice: loc.regionalOffice ?? null,
+        description: loc.description,
+        sortOrder: loc.sortOrder,
+        isActive: true,
+      },
+    });
+  }
+
   for (const p of OLA) {
     await prisma.olaPolicy.upsert({
       where: { id: p.id },
@@ -261,7 +339,7 @@ async function main() {
         itsmType: "INCIDENT",
         process: "CM",
         merchantId: "MID-102938",
-        location: "DALAM_KOTA",
+        location: "JKT_PUSAT",
         category: "VIP",
         status: "IN_PROGRESS",
         slaStatus: "WARNING",
@@ -292,7 +370,7 @@ async function main() {
         id: "t2",
         ticketNumber: "INC-2026-8842",
         merchantId: "MID-558201",
-        location: "DALAM_KOTA",
+        location: "JKT_PUSAT",
         category: "VIP",
         status: "OPEN",
         slaStatus: "ON_TRACK",
@@ -307,7 +385,7 @@ async function main() {
         id: "t3",
         ticketNumber: "INC-2026-8845",
         merchantId: "MID-990012",
-        location: "DALAM_KOTA",
+        location: "BDG_KOTA",
         category: "NON_VIP",
         status: "DISPATCHED",
         slaStatus: "BREACHED",

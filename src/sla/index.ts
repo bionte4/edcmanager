@@ -1,4 +1,5 @@
 import { getCategoryLabel, getCategorySlaProfile } from "../data/ticket-categories-store";
+import { getLocationLabel, getLocationSlaZone } from "../data/locations-store";
 
 export {
   PEAK_HOURS,
@@ -11,6 +12,7 @@ export type {
   TicketLocation,
   TicketCategory,
   SlaProfile,
+  SlaZone,
 } from "../config/sla.config";
 
 export type {
@@ -40,4 +42,9 @@ export {
   buildMonthlyUptimeFromTickets,
 } from "./uptime";
 
-export { getCategoryLabel, getCategorySlaProfile };
+export {
+  getCategoryLabel,
+  getCategorySlaProfile,
+  getLocationLabel,
+  getLocationSlaZone,
+};

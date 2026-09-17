@@ -108,6 +108,8 @@ export function VendorEvaluationModule({
   vendors?: VendorMonthlyMetrics[];
 }) {
   const comparison = buildVendorComparison(vendors);
+  const left = vendors.find((v) => v.vendorId === "v1") ?? vendors[0];
+  const right = vendors.find((v) => v.vendorId === "v2") ?? vendors[1];
 
   return (
     <div className="flex flex-col gap-3">
@@ -117,46 +119,50 @@ export function VendorEvaluationModule({
         ))}
       </div>
 
-      <section className="rounded-lg border border-border bg-card">
-        <div className="border-b border-border px-3 py-2">
-          <h2 className="text-sm font-semibold tracking-wide">Vendor 1 vs Vendor 2</h2>
-          <p className="text-xs text-muted-foreground">
-            Perbandingan SLA compliance, kecepatan resolusi, dan kendala operasional bulanan
-          </p>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Metrik</TableHead>
-              <TableHead>Vendor 1</TableHead>
-              <TableHead>Vendor 2</TableHead>
-              <TableHead>Lebih Baik</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {comparison.map((row) => (
-              <TableRow key={row.metric}>
-                <TableCell className="font-medium">{row.metric}</TableCell>
-                <TableCell className="font-mono text-xs">{row.vendor1}</TableCell>
-                <TableCell className="font-mono text-xs">{row.vendor2}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      row.winner === "Tie"
-                        ? "secondary"
-                        : row.winner === "Vendor 1"
-                          ? "safe"
-                          : "warning"
-                    }
-                  >
-                    {row.winner}
-                  </Badge>
-                </TableCell>
+      {left && right && (
+        <section className="rounded-lg border border-border bg-card">
+          <div className="border-b border-border px-3 py-2">
+            <h2 className="text-sm font-semibold tracking-wide">
+              {left.vendorName} vs {right.vendorName}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Perbandingan SLA compliance, kecepatan resolusi, dan kendala operasional bulanan
+            </p>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Metrik</TableHead>
+                <TableHead>{left.vendorName}</TableHead>
+                <TableHead>{right.vendorName}</TableHead>
+                <TableHead>Lebih Baik</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </section>
+            </TableHeader>
+            <TableBody>
+              {comparison.map((row) => (
+                <TableRow key={row.metric}>
+                  <TableCell className="font-medium">{row.metric}</TableCell>
+                  <TableCell className="font-mono text-xs">{row.vendor1}</TableCell>
+                  <TableCell className="font-mono text-xs">{row.vendor2}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        row.winner === "Tie"
+                          ? "secondary"
+                          : row.winner === left.vendorName
+                            ? "safe"
+                            : "warning"
+                      }
+                    >
+                      {row.winner}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </section>
+      )}
     </div>
   );
 }

@@ -1,9 +1,25 @@
 import type { OlaPolicy, OlaTicketInput } from "./types";
 import type { OlaStage } from "@/config/ola.config";
+import { getLocationSlaZone } from "@/data/locations-store";
+import { isSlaZone } from "@/config/location.config";
 
 function fieldScore(policyValue: string, ticketValue: string): number | null {
   if (policyValue === "*") return 0;
   if (policyValue === ticketValue) return 10;
+  return null;
+}
+
+/** Match location code exactly, or policy zone against ticket's resolved SLA zone. */
+function locationScore(
+  policyValue: string,
+  ticketLocationCode: string
+): number | null {
+  if (policyValue === "*") return 0;
+  if (policyValue === ticketLocationCode) return 10;
+  if (isSlaZone(policyValue)) {
+    const zone = getLocationSlaZone(ticketLocationCode);
+    if (policyValue === zone) return 5;
+  }
   return null;
 }
 
@@ -16,7 +32,7 @@ export function policyMatchScore(
 
   const parts = [
     fieldScore(policy.itsmType, ticket.itsmType),
-    fieldScore(policy.location, ticket.location),
+    locationScore(policy.location, ticket.location),
     fieldScore(policy.category, ticket.category),
     fieldScore(policy.process, ticket.process),
   ];

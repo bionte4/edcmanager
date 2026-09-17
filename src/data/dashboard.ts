@@ -212,10 +212,13 @@ export function buildDashboardKpis(
   };
 }
 
-export const LOCATION_LABELS: Record<TicketLocation, string> = {
+export const LOCATION_LABELS: Record<string, string> = {
   DALAM_KOTA: "Dalam Kota",
   LUAR_KOTA: "Luar Kota",
   LUAR_PULAU: "Luar Pulau",
+  JKT_PUSAT: "Jakarta Pusat",
+  BDG_KOTA: "Bandung Kota",
+  DPS_BALI: "Denpasar Bali",
 };
 
 export const CATEGORY_LABELS: Record<string, string> = {
@@ -226,6 +229,11 @@ export const CATEGORY_LABELS: Record<string, string> = {
 /** Resolve display label for a ticket category code (falls back to code). */
 export function categoryLabel(code: string): string {
   return CATEGORY_LABELS[code] ?? code;
+}
+
+/** Resolve display label for a location code (falls back to code). */
+export function locationLabel(code: string): string {
+  return LOCATION_LABELS[code] ?? code;
 }
 
 export const SLA_LABELS: Record<SlaEvaluationStatus, string> = {

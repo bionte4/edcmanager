@@ -24,7 +24,6 @@ import { CATEGORY_LABELS, LOCATION_LABELS } from "@/data/dashboard";
 
 const STAGES: OlaStage[] = ["ACKNOWLEDGE", "DISPATCH"];
 const ITSM_OPTS = ["*", "INCIDENT", "REQUEST", "PROBLEM", "CHANGE"] as const;
-const LOC_OPTS = ["*", "DALAM_KOTA", "LUAR_KOTA", "LUAR_PULAU"] as const;
 const PROC_OPTS = [
   "*",
   "CM",
@@ -39,11 +38,12 @@ const PROC_OPTS = [
 
 function matchLabel(
   value: string,
-  catLabels: Record<string, string> = CATEGORY_LABELS
+  catLabels: Record<string, string> = CATEGORY_LABELS,
+  locLabels: Record<string, string> = LOCATION_LABELS
 ): string {
   if (value === "*") return "Semua";
   if (value in ITSM_TYPE_LABELS) return ITSM_TYPE_LABELS[value as keyof typeof ITSM_TYPE_LABELS];
-  if (value in LOCATION_LABELS) return LOCATION_LABELS[value as keyof typeof LOCATION_LABELS];
+  if (value in locLabels) return locLabels[value]!;
   if (value in catLabels) return catLabels[value]!;
   if (value in PROCESS_LABELS) return PROCESS_LABELS[value as keyof typeof PROCESS_LABELS];
   return value;
@@ -69,6 +69,15 @@ export function OlaPoliciesModule() {
   const [catOpts, setCatOpts] = useState<string[]>(["*", "VIP", "NON_VIP"]);
   const [catLabels, setCatLabels] = useState<Record<string, string>>({
     ...CATEGORY_LABELS,
+  });
+  const [locOpts, setLocOpts] = useState<string[]>([
+    "*",
+    "DALAM_KOTA",
+    "LUAR_KOTA",
+    "LUAR_PULAU",
+  ]);
+  const [locLabels, setLocLabels] = useState<Record<string, string>>({
+    ...LOCATION_LABELS,
   });
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -104,10 +113,35 @@ export function OlaPoliciesModule() {
     }
   }, []);
 
+  const loadLocations = useCallback(async () => {
+    try {
+      const res = await fetch("/api/locations", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        locations?: Array<{ code: string; label: string; slaZone: string }>;
+      };
+      const locs = data.locations ?? [];
+      if (!locs.length) return;
+      const labels: Record<string, string> = { ...LOCATION_LABELS };
+      for (const l of locs) labels[l.code] = l.label;
+      // Keep zone keys selectable for OLA even if alias rows inactive
+      for (const z of ["DALAM_KOTA", "LUAR_KOTA", "LUAR_PULAU"] as const) {
+        if (!labels[z]) labels[z] = LOCATION_LABELS[z] ?? z;
+      }
+      setLocLabels(labels);
+      const codes = new Set<string>(["*", ...locs.map((l) => l.code)]);
+      for (const z of ["DALAM_KOTA", "LUAR_KOTA", "LUAR_PULAU"]) codes.add(z);
+      setLocOpts([...codes]);
+    } catch {
+      /* keep zone defaults */
+    }
+  }, []);
+
   useEffect(() => {
     void load();
     void loadCategories();
-  }, [load, loadCategories]);
+    void loadLocations();
+  }, [load, loadCategories, loadLocations]);
 
   function resetForm() {
     setEditingId(null);
@@ -262,8 +296,10 @@ export function OlaPoliciesModule() {
                   {p.limitMinutes}m · warn {(p.warningThreshold * 100).toFixed(0)}%
                 </TableCell>
                 <TableCell className="text-[11px] text-muted-foreground">
-                  {matchLabel(p.itsmType, catLabels)} · {matchLabel(p.location, catLabels)} ·{" "}
-                  {matchLabel(p.category, catLabels)} · {matchLabel(p.process, catLabels)}
+                  {matchLabel(p.itsmType, catLabels, locLabels)} ·{" "}
+                  {matchLabel(p.location, catLabels, locLabels)} ·{" "}
+                  {matchLabel(p.category, catLabels, locLabels)} ·{" "}
+                  {matchLabel(p.process, catLabels, locLabels)}
                 </TableCell>
                 <TableCell className="font-mono text-xs">{p.priority}</TableCell>
                 <TableCell>
@@ -394,9 +430,9 @@ export function OlaPoliciesModule() {
                 value={form.location}
                 onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
               >
-                {LOC_OPTS.map((v) => (
+                {locOpts.map((v) => (
                   <option key={v} value={v}>
-                    {matchLabel(v)}
+                    {matchLabel(v, catLabels, locLabels)}
                   </option>
                 ))}
               </select>

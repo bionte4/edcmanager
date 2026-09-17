@@ -63,13 +63,21 @@ export async function refreshOlaCache(): Promise<void> {
   }
 }
 
-void refreshOlaCache();
+// Do not refresh on module import — breaks `next build` when DB is unreachable.
+let olaCacheWarmStarted = false;
+
+function ensureOlaCacheWarm(): void {
+  if (olaCacheWarmStarted) return;
+  olaCacheWarmStarted = true;
+  void refreshOlaCache();
+}
 
 /** Sync read from cache — reporting / ticketing call this synchronously. */
 export function listOlaPolicies(opts?: {
   stage?: OlaStage;
   activeOnly?: boolean;
 }): OlaPolicy[] {
+  ensureOlaCacheWarm();
   return policies
     .filter((p) => (opts?.stage ? p.stage === opts.stage : true))
     .filter((p) => (opts?.activeOnly ? p.isActive : true))

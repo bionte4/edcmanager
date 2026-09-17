@@ -26,6 +26,10 @@ export const REGIONAL_OFFICES = [
   "RO Denpasar",
 ] as const;
 
+/**
+ * Fallback vendor names when API/DB unavailable.
+ * Prefer live list from GET /api/vendors?activeOnly=1.
+ */
 export const ASSET_VENDORS = ["Vendor 1", "Vendor 2"] as const;
 
 export const EDC_STATUS_LABELS: Record<EdcUnitStatus, string> = {

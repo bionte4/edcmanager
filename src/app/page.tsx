@@ -14,6 +14,8 @@ import { listAssets } from "@/data/assets-store";
 import { BUFFER_STOCK_MIN_PERCENT } from "@/config/inventory.config";
 import { REGIONAL_OFFICES } from "@/config/assets.config";
 
+export const dynamic = "force-dynamic";
+
 function bufferFromAssets(
   assets: Awaited<ReturnType<typeof listAssets>>
 ): BufferStockRow[] {
