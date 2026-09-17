@@ -667,6 +667,31 @@ async function main() {
     });
   }
 
+  const allRos = [
+    "RO Jakarta 1",
+    "RO Bandung",
+    "RO Semarang",
+    "RO Surabaya",
+    "RO Medan",
+    "RO Palembang",
+    "RO Denpasar",
+    "RO Makassar",
+    "RO Balikpapan",
+    "RO Pontianak",
+    "RO Manado",
+    "RO Jayapura",
+  ];
+  await prisma.pmSettings.upsert({
+    where: { id: "default" },
+    update: {},
+    create: {
+      id: "default",
+      generateDayOfMonth: 1,
+      warningDaysBeforeMonthEnd: 5,
+      activeRosJson: JSON.stringify(allRos),
+    },
+  });
+
   console.log("[seed] done");
 }
 

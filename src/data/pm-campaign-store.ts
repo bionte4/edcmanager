@@ -9,6 +9,7 @@ import {
   type PeakSeasonStatus,
 } from "@/config/peak-season.config";
 import { getPeakSeasonStatuses } from "@/data/peak-season-store";
+import { getPmSettings } from "@/data/pm-settings-store";
 import { listLocations } from "@/data/locations-store";
 import {
   createIntegrationTicket,
@@ -97,22 +98,26 @@ export async function listPmTicketsForPeriod(
 
 export async function getPmCalendarSnapshot(asOf = new Date()) {
   const periodKey = jakartaPeriodKey(asOf);
-  const [tickets, runs] = await Promise.all([
+  const [tickets, runs, settings] = await Promise.all([
     listPmTicketsForPeriod(periodKey),
     listCampaignRuns(20),
+    getPmSettings(),
   ]);
   const monthlyRun = runs.find(
     (r) => r.kind === "PM_MONTHLY" && r.periodKey === periodKey
   );
   return {
     periodKey,
-    generateDayOfMonth: PM_CALENDAR_CONFIG.generateDayOfMonth,
+    generateDayOfMonth: settings.generateDayOfMonth,
+    warningDaysBeforeMonthEnd: settings.warningDaysBeforeMonthEnd,
+    activeRos: settings.activeRos,
     process: PM_CALENDAR_CONFIG.process,
     itsmType: PM_CALENDAR_CONFIG.itsmType,
     regionalOffices: [...REGIONAL_OFFICES],
     tickets,
     monthlyRun: monthlyRun ?? null,
     recentRuns: runs.filter((r) => r.kind === "PM_MONTHLY"),
+    settings,
   };
 }
 
@@ -127,6 +132,9 @@ export async function generateMonthlyPm(input: {
   skipped: number;
 }> {
   const periodKey = input.periodKey ?? jakartaPeriodKey();
+  const settings = await getPmSettings();
+  const activeRos = settings.activeRos;
+
   const existing = await prisma.pmCampaignRun.findUnique({
     where: {
       kind_periodKey: { kind: "PM_MONTHLY", periodKey },
@@ -145,7 +153,7 @@ export async function generateMonthlyPm(input: {
   let skipped = 0;
   const errors: string[] = [];
 
-  for (const ro of REGIONAL_OFFICES) {
+  for (const ro of activeRos) {
     const externalTicketId = `pm:${periodKey}:${slugRo(ro)}`;
     try {
       const location = await locationForRo(ro);
@@ -185,7 +193,8 @@ export async function generateMonthlyPm(input: {
         created: created.map((t) => t.ticketNumber),
         skipped,
         errors,
-        regionalOffices: REGIONAL_OFFICES.length,
+        regionalOffices: activeRos,
+        generateDayOfMonth: settings.generateDayOfMonth,
       }),
     },
     update: {
@@ -196,7 +205,8 @@ export async function generateMonthlyPm(input: {
         created: created.map((t) => t.ticketNumber),
         skipped,
         errors,
-        regionalOffices: REGIONAL_OFFICES.length,
+        regionalOffices: activeRos,
+        generateDayOfMonth: settings.generateDayOfMonth,
         forced: !!input.force,
       }),
       generatedAt: new Date(),

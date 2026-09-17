@@ -809,3 +809,16 @@ model PeakSeasonWindow {
   @@index([kind])
   @@map("peak_season_windows")
 }
+
+/// Singleton PM monthly generator settings (edit via /ops/campaigns).
+model PmSettings {
+  id                        String   @id @default("default")
+  /// Cron preferred day-of-month (Asia/Jakarta), 1–28 safe for all months
+  generateDayOfMonth        Int      @default(1)
+  warningDaysBeforeMonthEnd Int      @default(5)
+  /// JSON string array of active Regional Offices; empty = all ROs
+  activeRosJson             String   @default("[]")
+  updatedAt                 DateTime @updatedAt
+
+  @@map("pm_settings")
+}

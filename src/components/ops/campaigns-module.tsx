@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/components/auth/auth-provider";
 import type { CampaignRunRow } from "@/data/pm-campaign-store";
+import type { PmSettingsRow } from "@/data/pm-settings-store";
+import { REGIONAL_OFFICES } from "@/config/assets.config";
 import {
   PEAK_SEASON_KINDS,
   PEAK_SEASON_KIND_LABELS,
@@ -26,6 +28,8 @@ import { formatDateTime } from "@/lib/utils";
 type PmSnap = {
   periodKey: string;
   generateDayOfMonth: number;
+  warningDaysBeforeMonthEnd?: number;
+  activeRos?: string[];
   tickets: Array<{
     id: string;
     ticketNumber: string;
@@ -36,6 +40,7 @@ type PmSnap = {
   }>;
   monthlyRun: CampaignRunRow | null;
   regionalOffices: string[];
+  settings?: PmSettingsRow;
 };
 
 type PeakSnap = {
@@ -82,6 +87,9 @@ export function CampaignsModule() {
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<PeakForm>(emptyForm);
+  const [pmDay, setPmDay] = useState(1);
+  const [pmWarn, setPmWarn] = useState(5);
+  const [pmRos, setPmRos] = useState<string[]>([...REGIONAL_OFFICES]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -107,6 +115,20 @@ export function CampaignsModule() {
     setPeak(data.peak ?? null);
     setRuns(data.runs ?? []);
     if (winRes.ok) setWindows(winData.windows ?? []);
+    const s = data.pm?.settings ?? data.pm;
+    if (s) {
+      setPmDay(s.generateDayOfMonth ?? 1);
+      setPmWarn(
+        ("warningDaysBeforeMonthEnd" in s
+          ? s.warningDaysBeforeMonthEnd
+          : 5) ?? 5
+      );
+      setPmRos(
+        ("activeRos" in s && s.activeRos?.length
+          ? s.activeRos
+          : [...REGIONAL_OFFICES]) as string[]
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -253,6 +275,45 @@ export function CampaignsModule() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function savePmSettings(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canManage) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/ops/pm-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          generateDayOfMonth: pmDay,
+          warningDaysBeforeMonthEnd: pmWarn,
+          activeRos: pmRos,
+        }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        settings?: PmSettingsRow;
+      };
+      if (!res.ok) {
+        setError(data.error || "Gagal simpan settings PM");
+        return;
+      }
+      setMessage(
+        `Settings PM disimpan · generate tgl ${data.settings?.generateDayOfMonth} · ${data.settings?.activeRos.length ?? 0} RO.`
+      );
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function togglePmRo(ro: string) {
+    setPmRos((prev) =>
+      prev.includes(ro) ? prev.filter((x) => x !== ro) : [...prev, ro]
+    );
   }
 
   if (!can("ticket:read")) {
@@ -599,8 +660,9 @@ export function CampaignsModule() {
             </h2>
             <p className="text-[11px] text-muted-foreground">
               REQUEST + PM · periode{" "}
-              <span className="font-mono">{pm?.periodKey ?? "…"}</span> · 1 tiket /
-              RO
+              <span className="font-mono">{pm?.periodKey ?? "…"}</span> · cron tgl{" "}
+              <span className="font-mono">{pm?.generateDayOfMonth ?? "…"}</span> ·{" "}
+              {pm?.activeRos?.length ?? "…"} RO aktif
             </p>
           </div>
           <div className="flex gap-1">
@@ -626,6 +688,78 @@ export function CampaignsModule() {
             )}
           </div>
         </div>
+
+        {canManage && (
+          <form
+            onSubmit={(e) => void savePmSettings(e)}
+            className="space-y-2 border-b border-border p-3"
+          >
+            <p className="text-xs font-semibold tracking-wide">
+              Settings PM (ringan)
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Hari generate cron (1–28) + RO yang mendapat tiket PM bulanan
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <label className="flex flex-col gap-1 text-xs">
+                Hari generate
+                <input
+                  type="number"
+                  min={1}
+                  max={28}
+                  className="h-8 w-20 rounded-md border border-input bg-background px-2 text-sm font-mono"
+                  value={pmDay}
+                  onChange={(e) => setPmDay(Number(e.target.value))}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                Warning H−
+                <input
+                  type="number"
+                  min={0}
+                  max={14}
+                  className="h-8 w-20 rounded-md border border-input bg-background px-2 text-sm font-mono"
+                  value={pmWarn}
+                  onChange={(e) => setPmWarn(Number(e.target.value))}
+                />
+              </label>
+              <div className="flex items-end gap-2">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={() => setPmRos([...REGIONAL_OFFICES])}
+                >
+                  Semua RO
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={() => setPmRos([])}
+                >
+                  Kosongkan
+                </Button>
+              </div>
+            </div>
+            <div className="grid max-h-40 grid-cols-2 gap-1 overflow-auto sm:grid-cols-3 lg:grid-cols-4">
+              {REGIONAL_OFFICES.map((ro) => (
+                <label key={ro} className="flex items-center gap-1.5 text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={pmRos.includes(ro)}
+                    onChange={() => togglePmRo(ro)}
+                  />
+                  <span className="truncate">{ro}</span>
+                </label>
+              ))}
+            </div>
+            <Button type="submit" size="sm" disabled={busy || pmRos.length === 0}>
+              Simpan settings PM
+            </Button>
+          </form>
+        )}
+
         <Table>
           <TableHeader>
             <TableRow>
