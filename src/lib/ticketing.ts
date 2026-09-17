@@ -73,10 +73,13 @@ export interface OpsTicket {
   createdByName?: string;
   problemId?: string | null;
   relatedChangeId?: string | null;
+  externalTicketId?: string | null;
+  externalSystem?: string | null;
   openedAt: string;
   closedAt?: string | null;
   acknowledgedAt?: string | null;
   dispatchedAt?: string | null;
+  updatedAt?: string;
   activities: TicketActivityRow[];
 }
 
@@ -102,6 +105,8 @@ export function createTicket(input: {
   process?: OperationalProcess;
   problemId?: string;
   relatedChangeId?: string;
+  externalTicketId?: string;
+  externalSystem?: string;
   openedAt?: Date;
 }): OpsTicket {
   const merchantId = input.merchantId.trim().toUpperCase();
@@ -113,6 +118,7 @@ export function createTicket(input: {
   const openedAt = input.openedAt ?? new Date();
   const id = `t-${Date.now()}`;
   const ticketNumber = `${ITSM_TYPE_PREFIX[itsmType]}-${openedAt.getFullYear()}-${String(Date.now()).slice(-4)}`;
+  const nowIso = openedAt.toISOString();
 
   return {
     id,
@@ -131,14 +137,17 @@ export function createTicket(input: {
     nocOwnerName: input.actor.role === "NOC" ? input.actor.name : undefined,
     problemId: input.problemId,
     relatedChangeId: input.relatedChangeId,
-    openedAt: openedAt.toISOString(),
+    externalTicketId: input.externalTicketId?.trim() || null,
+    externalSystem: input.externalSystem?.trim() || null,
+    openedAt: nowIso,
+    updatedAt: nowIso,
     activities: [
       {
         id: `a-${Date.now()}`,
         type: "CREATED",
         note: `${itsmType} dibuat oleh ${input.actor.name} (${process})`,
         actorName: input.actor.name,
-        at: openedAt.toISOString(),
+        at: nowIso,
         toStatus: "OPEN",
       },
     ],

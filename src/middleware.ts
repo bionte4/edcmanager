@@ -3,7 +3,12 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/session";
 import { can } from "@/lib/rbac";
 import type { AppRole } from "@/config/rbac.config";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/logout"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/v1",
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

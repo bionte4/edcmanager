@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Cable,
   Headset,
   LayoutDashboard,
   LogOut,
@@ -30,6 +31,7 @@ const NAV: Array<{
   { href: "/noc", label: "NOC Roster", icon: Headset, permission: "noc:read" },
   { href: "/buffer-stock", label: "Buffer Stock", icon: Package, permission: "inventory:read" },
   { href: "/evaluasi-vendor", label: "Evaluasi Vendor", icon: Users, permission: "vendor:read" },
+  { href: "/integration", label: "Integration API", icon: Cable, permission: "dashboard:read" },
   { href: "/admin/users", label: "Admin Users", icon: Shield, permission: "admin:access" },
 ];
 

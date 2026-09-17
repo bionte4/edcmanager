@@ -70,7 +70,15 @@ Buka [http://localhost:3000](http://localhost:3000) — akan diarahkan ke `/logi
 | `/noc` | NOC standby roster |
 | `/buffer-stock` | Buffer stock logistik |
 | `/evaluasi-vendor` | Evaluasi performa vendor |
+| `/integration` | Dokumentasi Integration API v1 |
 | `/admin/users` | Admin Users CRUD + RBAC matrix |
+
+### Integration API (external systems)
+
+Base: `/api/v1/tickets`  
+Auth: `Authorization: Bearer <apiKey>` atau `X-Api-Key`
+
+Demo key (Service Desk): `edc_sk_demo_servicedesk_change_me`
 
 ## Script berguna
 
