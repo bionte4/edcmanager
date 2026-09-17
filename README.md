@@ -8,10 +8,11 @@ Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)
 
 | Dokumen | Isi |
 |---------|-----|
-| [Manual Guide](docs/MANUAL.md) | Cara pakai modul, RBAC, clock-stop, LO, PM/peak, dispatch |
+| [User Guide](docs/USER-GUIDE.md) | Panduan pengguna operasional (per peran + checklist) |
+| [Manual Guide](docs/MANUAL.md) | Detail modul, RBAC, config, troubleshooting |
 | [ERD](docs/ERD.md) | Entity Relationship Diagram (Prisma) |
 | [Deploy VPS](docs/DEPLOY-VPS.md) | Docker Compose + Nginx + HTTPS + cron |
-| [Prompted.md](Prompted.md) | Riwayat prompt build + roadmap ops A–E |
+| [Prompted.md](Prompted.md) | Riwayat prompt build + roadmap ops |
 
 ## Fitur utama
 

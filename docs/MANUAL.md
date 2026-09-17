@@ -1,9 +1,11 @@
 # EDC Manager — Manual Guide
 
-Panduan operasional **EDC Manager** (SLA/OLA, ticketing, LO DOG, logistik, WFM, PM/peak, dispatch).
+Panduan operasional teknis **EDC Manager** (SLA/OLA, ticketing, LO DOG, logistik, WFM, PM/peak, dispatch).
+
+**Untuk pengguna harian (NOC / LO / Ops / …):** mulai dari [User Guide](./USER-GUIDE.md).
 
 Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)  
-Terkait: [ERD](./ERD.md) · [Deploy VPS](./DEPLOY-VPS.md) · [README](../README.md)
+Terkait: [User Guide](./USER-GUIDE.md) · [ERD](./ERD.md) · [Deploy VPS](./DEPLOY-VPS.md) · [README](../README.md)
 
 ---
 
