@@ -53,8 +53,8 @@ Logout: tombol **Logout** di header (HP: ikon keluar).
 | Dashboard | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Ticketing | ✓ | ✓ | ✓ | ✓ | ✓ (update terbatas) |
 | NOC Roster | ✓ | — | ✓ | ✓ | — |
-| WFM | ✓ | ✓ | ✓ | ✓ | — |
-| OLA | ✓ | ✓ CRUD | ✓ read | ✓ read | — |
+| WFM | ✓ | ✓ | ✓ | — | — |
+| OLA | ✓ | ✓ CRUD | ✓ read | — | — |
 | Reporting | ✓ | ✓ + export | ✓ + export | — | — |
 | Assets | ✓ | ✓ | ✓ | — | ✓ read |
 | Buffer Stock | ✓ | ✓ | ✓ | — | ✓ read |

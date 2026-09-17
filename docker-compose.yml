@@ -32,6 +32,7 @@ services:
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
       AUTH_SECRET: ${AUTH_SECRET:-edc-docker-secret-change-me}
+      APP_URL: ${APP_URL:-}
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/edcmanager?schema=public
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}

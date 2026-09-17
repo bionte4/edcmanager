@@ -13,6 +13,7 @@ services:
   app:
     environment:
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      APP_URL: ${APP_URL:-https://netmon.click}
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/edcmanager?schema=public
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}

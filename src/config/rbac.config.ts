@@ -49,8 +49,12 @@ const ALL: Permission[] = [...PERMISSIONS];
  * | ADMIN        | semua + Integration + Admin Users |
  * | OPS_MANAGER  | Dashboard, Ticketing, Assets, Buffer, Vendor, Notifications, WFM, OLA, Reporting |
  * | SUPERVISOR   | Dashboard, Ticketing, NOC, WFM, Assets, Buffer, Notifications, OLA read, Reporting |
- * | NOC (L1)     | Dashboard, Ticketing, NOC, WFM, Notifications, OLA read |
+ * | NOC (L1)     | Dashboard, Ticketing, NOC Roster, Notifications |
  * | VENDOR_TECH  | Dashboard, Ticketing, Assets, Buffer Stock |
+ *
+ * NOC tidak punya WFM/OLA menu: roster & OLA policy dikelola Supervisor/Ops.
+ * Absensi login NOC tetap dicatat server-side tanpa butuh wfm:read.
+ * Badge SLA/OLA di Ticketing tetap terlihat via ticket:read.
  */
 export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
   ADMIN: ALL,
@@ -101,10 +105,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, readonly Permission[]> = {
     "ticket:update",
     "ticket:assign",
     "noc:read",
-    "noc:manage_shift",
-    "wfm:read",
     "notification:read",
-    "ola:read",
   ],
   VENDOR_TECH: [
     "dashboard:read",
