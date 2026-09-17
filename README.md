@@ -15,6 +15,8 @@ Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)
 | **Evaluasi Vendor** | Vendor 1 vs Vendor 2: SLA compliance, resolusi, kendala operasional |
 | **SLA Engine** | Aturan SLA (Dalam Kota VIP peak 2 jam, warning 80%, laporan uptime) |
 | **Auth + RBAC** | Login session, role/permission matrix, Admin Users CRUD |
+| **Notifications** | SMTP email (assign + SLA warning/breach) dengan mode simulasi |
+| **AI Insight** | Risk score + summary + shift briefing (heuristic; LLM opsional) |
 
 ## Tech stack
 
@@ -70,6 +72,7 @@ Buka [http://localhost:3000](http://localhost:3000) — akan diarahkan ke `/logi
 | `/noc` | NOC standby roster |
 | `/buffer-stock` | Buffer stock logistik |
 | `/evaluasi-vendor` | Evaluasi performa vendor |
+| `/notifications` | Log SMTP / email alerts |
 | `/integration` | Dokumentasi Integration API v1 |
 | `/admin/users` | Admin Users CRUD + RBAC matrix |
 

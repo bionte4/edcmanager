@@ -379,3 +379,67 @@ model MetricLog {
   @@index([metTarget])
   @@map("metric_logs")
 }
+
+enum NotificationChannel {
+  EMAIL
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  SIMULATED
+}
+
+enum NotificationEvent {
+  TICKET_ASSIGNED
+  SLA_WARNING
+  SLA_BREACHED
+  BUFFER_ALERT
+  DIGEST
+  TEST
+}
+
+/// Outbound notification / email log
+model NotificationLog {
+  id        String              @id @default(cuid())
+  event     NotificationEvent
+  channel   NotificationChannel @default(EMAIL)
+  status    NotificationStatus
+  toAddress String
+  subject   String
+  body      String
+  ticketId  String?
+  error     String?
+  createdAt DateTime            @default(now())
+
+  @@index([event])
+  @@index([status])
+  @@index([createdAt])
+  @@index([ticketId])
+  @@map("notification_logs")
+}
+
+enum AiInsightKind {
+  SUMMARY
+  SLA_RISK
+  SHIFT_BRIEFING
+  VENDOR_COACHING
+}
+
+/// Cached AI / heuristic insights (advisory only — not SLA source of truth)
+model AiInsight {
+  id         String        @id @default(cuid())
+  kind       AiInsightKind
+  ticketId   String?
+  title      String
+  content    String
+  riskScore  Int?
+  provider   String        @default("heuristic")
+  createdAt  DateTime      @default(now())
+
+  @@index([kind])
+  @@index([ticketId])
+  @@index([createdAt])
+  @@map("ai_insights")
+}

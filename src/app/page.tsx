@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { KpiGrid } from "@/components/dashboard/kpi-grid";
 import { TicketTable } from "@/components/dashboard/ticket-table";
+import { DashboardAiBriefing } from "@/components/dashboard/ai-briefing";
 import {
   DEMO_AS_OF,
   MOCK_BUFFER_STOCK,
@@ -16,9 +17,10 @@ export default function DashboardPage() {
   return (
     <AppShell
       title="Dashboard Operasional"
-      description="KPI real-time, eskalasi SLA 80%, dan status buffer stock minimal 10% per RO."
+      description="KPI real-time, eskalasi SLA 80%, buffer stock, dan AI shift briefing."
     >
       <KpiGrid kpis={kpis} />
+      <DashboardAiBriefing dashboardTickets={tickets} />
       <TicketTable tickets={tickets} />
     </AppShell>
   );

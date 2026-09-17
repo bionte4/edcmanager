@@ -36,6 +36,7 @@ import {
   type NocUser,
   type OpsTicket,
 } from "@/lib/ticketing";
+import { AiInsightPanel } from "@/components/ai/ai-insight-panel";
 import type { TicketCategory, TicketLocation } from "@/config/sla.config";
 import { formatDateTime } from "@/lib/utils";
 
@@ -166,6 +167,36 @@ export function TicketingModule() {
       setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
       setMessage(`Incident di-link ke ${linkProblemId}.`);
     });
+  }
+
+  async function dispatchNotification(
+    action: "assign" | "sla",
+    level?: "WARNING" | "BREACHED"
+  ) {
+    if (!selected) return;
+    const owner = MOCK_USERS.find((u) => u.id === selected.nocOwnerId);
+    const res = await fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action,
+        level,
+        ticket: {
+          id: selected.id,
+          ticketNumber: selected.ticketNumber,
+          itsmType: selected.itsmType,
+          merchantId: selected.merchantId,
+          description: selected.description,
+          slaStatus: selected.slaStatus,
+          nocOwnerName: selected.nocOwnerName,
+          nocOwnerEmail: owner?.email,
+          location: selected.location,
+          category: selected.category,
+        },
+      }),
+    });
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok) throw new Error(data.error || "Gagal kirim notifikasi");
   }
 
   return (
@@ -398,6 +429,38 @@ export function TicketingModule() {
           </CardContent>
         </Card>
       </div>
+
+      <AiInsightPanel
+        ticket={
+          selected
+            ? {
+                id: selected.id,
+                ticketNumber: selected.ticketNumber,
+                itsmType: selected.itsmType,
+                process: selected.process,
+                merchantId: selected.merchantId,
+                location: selected.location,
+                category: selected.category,
+                status: selected.status,
+                description: selected.description,
+                slaStatus: selected.slaStatus,
+                elapsedLabel: selected.elapsedLabel,
+                remainingMs: selected.remainingMs,
+                needsEscalation: selected.needsEscalation,
+                vendorName: selected.vendorName,
+                problemId: selected.problemId,
+                nocOwnerName: selected.nocOwnerName,
+                activities: selected.activities,
+              }
+            : null
+        }
+        onNotifyAssign={async () => {
+          await dispatchNotification("assign");
+        }}
+        onNotifySla={async (level) => {
+          await dispatchNotification("sla", level);
+        }}
+      />
 
       <section className="rounded-lg border border-border bg-card">
         <div className="border-b border-border p-4">
