@@ -14,11 +14,13 @@ Repo: [github.com/bionte4/edcmanager](https://github.com/bionte4/edcmanager)
 | **Buffer Stock** | Distribusi cadangan EDC ≥10% per RO + mutasi/pooling |
 | **Evaluasi Vendor** | Vendor 1 vs Vendor 2: SLA compliance, resolusi, kendala operasional |
 | **SLA Engine** | Aturan SLA (Dalam Kota VIP peak 2 jam, warning 80%, laporan uptime) |
+| **Auth + RBAC** | Login session, role/permission matrix, Admin Users CRUD |
 
 ## Tech stack
 
 - **Frontend:** Next.js 15 (App Router), React 19, Tailwind CSS, Shadcn-style UI, Lucide Icons
 - **Backend logic:** TypeScript (SLA engine, inventory, ticketing workflow)
+- **Auth:** Signed HTTP-only session cookie (`jose`) + RBAC permissions
 - **Database:** PostgreSQL + Prisma ORM
 
 ## Prasyarat
@@ -33,7 +35,7 @@ git clone https://github.com/bionte4/edcmanager.git
 cd edcmanager
 npm install
 cp .env.example .env
-# Edit DATABASE_URL di .env jika memakai PostgreSQL
+# Edit DATABASE_URL dan AUTH_SECRET di .env
 ```
 
 Generate Prisma Client & (opsional) push schema:
@@ -49,15 +51,26 @@ npm run db:push
 npm run dev
 ```
 
-Buka [http://localhost:3000](http://localhost:3000).
+Buka [http://localhost:3000](http://localhost:3000) — akan diarahkan ke `/login`.
+
+### Demo login
+
+| Email | Role | Password |
+|--------|------|----------|
+| `admin@edc.local` | Administrator | `edc123` |
+| `andi.noc@edc.local` | NOC | `edc123` |
+| `dewi.supervisor@edc.local` | Supervisor | `edc123` |
+| `rudi.ops@edc.local` | Ops Manager | `edc123` |
 
 | Route | Halaman |
 |--------|---------|
+| `/login` | Sign in |
 | `/` | Dashboard operasional |
 | `/ticketing` | Ticketing system |
 | `/noc` | NOC standby roster |
 | `/buffer-stock` | Buffer stock logistik |
 | `/evaluasi-vendor` | Evaluasi performa vendor |
+| `/admin/users` | Admin Users CRUD + RBAC matrix |
 
 ## Script berguna
 

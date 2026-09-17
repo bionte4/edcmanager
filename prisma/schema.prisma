@@ -62,6 +62,7 @@ enum MutationType {
 }
 
 enum UserRole {
+  ADMIN
   NOC
   SUPERVISOR
   VENDOR_TECH
@@ -96,23 +97,73 @@ enum TicketActivityType {
 
 /// Operations personnel who handle or supervise tickets.
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  phone     String?
-  role      UserRole
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  phone        String?
+  role         UserRole
+  /// Optional password hash for credential login (ADMIN manages users)
+  passwordHash String?
+  isActive     Boolean   @default(true)
+  /// Soft delete — never hard-delete operational users
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  shifts               NocShift[]
-  ticketsAsNoc         Ticket[]         @relation("TicketNocOwner")
-  ticketsCreated       Ticket[]         @relation("TicketCreatedBy")
-  activitiesPerformed  TicketActivity[]
+  shifts              NocShift[]
+  ticketsAsNoc        Ticket[]         @relation("TicketNocOwner")
+  ticketsCreated      Ticket[]         @relation("TicketCreatedBy")
+  activitiesPerformed TicketActivity[]
+  auditLogs           AuditLog[]
 
   @@index([role])
   @@index([isActive])
+  @@index([deletedAt])
   @@map("users")
+}
+
+/// Named permission keys used by RBAC checks (seeded / managed by ADMIN).
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+/// Role ↔ permission mapping (ADMIN can adjust without redeploy).
+model RolePermission {
+  id           String   @id @default(cuid())
+  role         UserRole
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([role, permissionId])
+  @@index([role])
+  @@map("role_permissions")
+}
+
+/// Immutable audit trail for admin / sensitive actions.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
 
 /// Standby / on-duty roster for NOC command center shifts.

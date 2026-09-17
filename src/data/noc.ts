@@ -213,6 +213,7 @@ export const MOCK_OPS_TICKETS: OpsTicket[] = [
 ];
 
 export const ROLE_LABELS: Record<NocUser["role"], string> = {
+  ADMIN: "Administrator",
   NOC: "NOC",
   SUPERVISOR: "Supervisor",
   VENDOR_TECH: "Vendor Tech",

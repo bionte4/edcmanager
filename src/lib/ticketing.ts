@@ -5,7 +5,7 @@ import {
 import { computeSlaDeadline, evaluateSlaStatus } from "@/sla";
 import type { TicketCategory, TicketLocation } from "@/config/sla.config";
 
-export type UserRole = "NOC" | "SUPERVISOR" | "VENDOR_TECH" | "OPS_MANAGER";
+export type UserRole = "ADMIN" | "NOC" | "SUPERVISOR" | "VENDOR_TECH" | "OPS_MANAGER";
 export type ShiftType = "MORNING" | "AFTERNOON" | "NIGHT";
 export type ShiftDutyStatus = "SCHEDULED" | "ON_DUTY" | "OFF_DUTY";
 export type TicketActivityType =

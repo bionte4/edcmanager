@@ -2,17 +2,36 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Headset, LayoutDashboard, Package, Radio, Ticket, Users } from "lucide-react";
+import {
+  Headset,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  Radio,
+  Shield,
+  Ticket,
+  Users,
+} from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth/auth-provider";
+import type { Permission } from "@/config/rbac.config";
+import { ROLE_LABELS } from "@/config/rbac.config";
 import { cn } from "@/lib/utils";
 
-const NAV = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/ticketing", label: "Ticketing", icon: Ticket },
-  { href: "/noc", label: "NOC Roster", icon: Headset },
-  { href: "/buffer-stock", label: "Buffer Stock", icon: Package },
-  { href: "/evaluasi-vendor", label: "Evaluasi Vendor", icon: Users },
-] as const;
+const NAV: Array<{
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  permission: Permission;
+}> = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, permission: "dashboard:read" },
+  { href: "/ticketing", label: "Ticketing", icon: Ticket, permission: "ticket:read" },
+  { href: "/noc", label: "NOC Roster", icon: Headset, permission: "noc:read" },
+  { href: "/buffer-stock", label: "Buffer Stock", icon: Package, permission: "inventory:read" },
+  { href: "/evaluasi-vendor", label: "Evaluasi Vendor", icon: Users, permission: "vendor:read" },
+  { href: "/admin/users", label: "Admin Users", icon: Shield, permission: "admin:access" },
+];
 
 export function AppShell({
   title,
@@ -24,6 +43,9 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { user, can, logout, loading } = useAuth();
+
+  const visibleNav = NAV.filter((item) => can(item.permission));
 
   return (
     <div className="min-h-screen">
@@ -42,16 +64,22 @@ export function AppShell({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="hidden items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground sm:inline-flex">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sla-safe" />
-                Live monitor
-              </span>
+              {!loading && user && (
+                <span className="hidden items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 text-xs sm:inline-flex">
+                  <span className="font-medium">{user.name}</span>
+                  <span className="text-muted-foreground">· {ROLE_LABELS[user.role]}</span>
+                </span>
+              )}
               <ThemeToggle />
+              <Button type="button" variant="outline" size="sm" onClick={() => void logout()}>
+                <LogOut className="h-3.5 w-3.5" />
+                Logout
+              </Button>
             </div>
           </div>
 
           <nav className="flex flex-wrap gap-1">
-            {NAV.map(({ href, label, icon: Icon }) => {
+            {visibleNav.map(({ href, label, icon: Icon }) => {
               const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
               return (
                 <Link
